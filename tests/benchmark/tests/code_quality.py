@@ -645,7 +645,7 @@ def run_submodule_regression_test(rosetta_dir, working_dir, platform, config, hp
         if base != main_sha1 and base != current_sha1: # We have a submodule which isn't up-to-date with main's main
             submodule_states[submodule] = "NEEDS MERGE"
             submodule_status[_StateKey_] = _S_failed_
-            submodule_status[_LogKey_] = f"Submodule {submodule} has commits which diverge with the version in main's main's {submodule}. You need to merge the submodule versions."
+            submodule_status[_LogKey_] = f"Submodule {submodule} has commits which diverge with the version in Rosetta's main branch's {submodule}. You need to merge the submodule versions."
             continue
 
         #############
@@ -666,7 +666,7 @@ def run_submodule_regression_test(rosetta_dir, working_dir, platform, config, hp
         base = base.strip()
 
         if base != submain_sha1:
-            submodule_states[submodule] = "is not up-to-date with submodule main"
+            submodule_states[submodule] = "is not up-to-date with submodule primary branch " + primary_branch
             # This is not an error, just an info message
         else:
             submodule_states[submodule] = 'okay'
