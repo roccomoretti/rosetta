@@ -9,6 +9,8 @@
 # Utility script to parse and extract data from score files in JSON format
 # @author Luki Goldschmidt <lugo@uw.edu>
 
+from __future__ import print_function
+
 import sys
 import os
 import json
@@ -31,7 +33,7 @@ class ScoreFile:
         o = json.loads(line)
         self.decoys.append(o)
       except ValueError:
-        print >> sys.stderr, "Failed to parse JSON object; skipping line:\n", line
+        print("Failed to parse JSON object; skipping line:\n", line, file=sys.stderr)
 
   def getDecoyCount(self):
     return len(self.decoys)
@@ -77,7 +79,7 @@ class ScoreFile:
     for decoy_name in scores:
       decoy = scores[decoy_name]
       if stats == None:
-        columns = decoy.keys()
+        columns = list(decoy.keys())
         stats = { k: [] for k in columns }
 
       for term in decoy:
@@ -129,13 +131,13 @@ def output_legacy(out, prefix):
   for decoy_terms in out:
     for decoy_term in decoy_terms:
       name, value = decoy_term
-      if not widths.has_key(name):
+      if name not in widths:
         widths[name] = len(name)
       l = len(str(value))
       if widths[name] < l:
         widths[name] = l
 
-  if widths.has_key('decoy'):
+  if 'decoy' in widths:
     widths['decoy'] = -widths['decoy']
 
   # Header
@@ -173,14 +175,14 @@ def output_CSV(out, prefix):
     values = []
     for decoy_term in decoy_terms:
       value = decoy_term[1]
-      if type(value) in [str, unicode] and "," in value:
+      if type(value) == str and "," in value:
         value = '"%s"' % value
       values.append(str(value))
     sys.stdout.write(prefix + ",".join(values) + "\n")
 
 def printVerbose(s):
   if options.verbose:
-    print >> sys.stderr, s
+    print(s, file=sys.stderr)
 
 ########################################################################
 
@@ -240,7 +242,7 @@ def main(argv):
       printVerbose("    Scorefile: %s" % filename)
 
     if filename != "-" and not os.path.isfile(filename):
-      print >> sys.stderr, "File not found:", filename
+      print("File not found:", filename, file=sys.stderr)
       continue
 
     sf = ScoreFile(filename)
@@ -251,26 +253,26 @@ def main(argv):
 
     ### Info handlers
     if options.decoynames:
-      print "\n".join( sf.getDecoyNames() )
+      print("\n".join( sf.getDecoyNames() ))
       continue
 
     if options.scoreterms:
-      print "\n".join( sf.getScoreTermNames() )
+      print("\n".join( sf.getScoreTermNames() ))
       continue
 
     ### Stats summary
     if options.summary:
       stats = sf.getStats(options.scores)
-      max_width = max( [ len(x) for x in stats.keys() ] )
+      max_width = max( len(x) for x in stats.keys() )
       fmt = "%*s:  %4s  %10s  %10s  %10s  %10s  %10s"
-      print fmt % (max_width, "TERM", "n", "Min", "Max", "Mean", "Median", "StdDev")
+      print(fmt % (max_width, "TERM", "n", "Min", "Max", "Mean", "Median", "StdDev"))
 
       for column in stats:
         v = stats[column]
         for f in ['min','max','mean','median','stddev']:
           if not v[f] == None:
             v[f] = "%.3f" % v[f]
-        print fmt % (max_width, column, v['n'], v['min'], v['max'], v['mean'], v['median'], v['stddev'])
+        print(fmt % (max_width, column, v['n'], v['min'], v['max'], v['mean'], v['median'], v['stddev']))
       continue
 
     ### Default score list handler
