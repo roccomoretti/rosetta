@@ -26,6 +26,7 @@
 #include <basic/options/keys/machine_learning.OptionKeys.gen.hh>
 #include <basic/database/open.hh>
 #include <basic/execute.hh>
+#include <basic/internet.hh>
 
 // core headers
 #include <core/conformation/Residue.hh>
@@ -169,7 +170,7 @@ MIFST::predict( core::pose::Pose const & pose, core::select::residue_selector::R
 
     // decide whether we run inference on all residues of the selection at once, or one-by-one
     {
-	    // enabling no_grad 	    
+	    // enabling no_grad
 	    torch::NoGradGuard no_grad;
 	    TR << "Starting prediction..." << std::endl;
 	    if (multirun) {
@@ -293,10 +294,8 @@ MIFST::download_model_if_not_existing( std::string const & path_to_model, bool c
             TR.Info << "Downloading missing model files.... " << std::endl;
             // TODO: remove certificate flag after updating ssl stuff on our gitlab
             std::string message = "Downloading model from GitLab, only happens once at first use (2.5GB in total).";
-            std::string command = "wget";
-            std::vector<std::string> args = {GITLAB_URL_, "--progress=bar:force", "--no-check-certificate", "-O", tar_file};
-            basic::ExecutionResult result = basic::execute(message, command, args, false, true );
-            if ( result.result != 0 ) {
+
+            if ( ! basic::download_file( GITLAB_URL_, tar_file ) ) {
                 utility_exit_with_message("Download failed. Please manually download the model from: " + GITLAB_URL_ + " , than extract the model directory to " + full_path_to_model );
             }
             TR.Info << "Model successfully downloaded." << std::endl;

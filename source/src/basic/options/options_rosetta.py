@@ -342,6 +342,9 @@ Options = Option_Group( '',
 					"variable is tried."),
 			Option( 'database_cache_dir', 'Path',
 				desc="Which directory to use when caching processed database files."),
+			Option( 'database_download', 'Boolean',
+				desc="Should database files be downloaded if they're not found on the database directory? "
+						"Can also be set by setting the ROSETTA3_DB_DOWNLOAD environment variable."),
 			Option( 'bcl', 'PathVector',
 				desc="Path to the BCL submodule in Rosetta. Must lead to a valid BCL submodule. "
 					"If the BCL is not found then we attempt to resolve the path relative to the Rosetta database."),

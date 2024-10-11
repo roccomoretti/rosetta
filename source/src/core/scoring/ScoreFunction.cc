@@ -3494,20 +3494,20 @@ ScoreFunction::indicate_required_context_graphs(
 /// optional extension.
 std::string
 find_weights_file(std::string const & name, std::string const & extension/*=".wts"*/) {
-	utility::io::izstream data1( name );
-	if ( data1.good() ) {
+	utility::io::izstream data( name );
+	if ( data.good() ) {
 		return name;
 	} else {
 		utility::io::izstream data2( name + extension );
 		if ( data2.good() ) {
 			return name + extension;
 		} else {
-			utility::io::izstream data3(  basic::database::full_name( "scoring/weights/"+name+extension, /*warn=*/false )  );
-			if ( data3.good() ) {
+			basic::database::open( data, "scoring/weights/"+name+extension, false );
+			if ( data.good() ) {
 				return basic::database::full_name( "scoring/weights/"+name+extension );
 			} else {
-				utility::io::izstream data4(  basic::database::full_name( "scoring/weights/"+name, false )  );
-				if ( data4.good() ) {
+				basic::database::open( data, "scoring/weights/"+name, false );
+				if ( data.good() ) {
 					return basic::database::full_name( "scoring/weights/"+name );
 				} else {
 					utility_exit_with_message( "Unable to open weights/patch file. None of (./)" + name + " or " +

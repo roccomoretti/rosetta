@@ -19,12 +19,14 @@
 // Project headers
 #include <basic/options/keys/in.OptionKeys.gen.hh>
 #include <basic/options/option.hh>
+#include <basic/internet.hh>
 
 // Utility headers
 #include <utility/io/izstream.hh>
 #include <utility/file/file_sys_util.hh>
 #include <utility/file/PathName.hh>
 #include <utility/excn/Exceptions.hh>
+#include <utility/version.hh>
 
 // C++ headers
 #include <cstdlib>
@@ -51,6 +53,10 @@ open(
 )
 {
 	using namespace utility::excn;
+	using namespace basic::options;
+	using namespace basic::options::OptionKeys;
+
+	warn = warn && ! option[ in::path::database_download ]();
 
 	if ( db_stream.good() ) {
 		db_stream.close();
@@ -61,12 +67,18 @@ open(
 		return false;
 	}
 
-	db_stream.open( full_name( db_file, warn ) );
+	std::string db_file_full = full_name( db_file, warn );
+
+	db_stream.open( db_file_full );
 
 	if ( db_stream ) { // Open succeeded
 		TR << "Database file opened: " << db_file << std::endl;
 		return true;
 	} else { // Open failed
+		if ( option[ in::path::database_download ]() ) {
+			return handle_database_download( db_file, db_file_full );
+		}
+
 		std::stringstream err_msg;
 		err_msg
 			<< "Database file open failed for: \"" << db_file << "\"" << std::endl;
@@ -272,6 +284,19 @@ full_cache_name(
 	}
 
 	return "";
+}
+
+bool
+handle_database_download( std::string const & db_file, std::string const & db_file_full ) {
+	static std::string const github_prefix = "https://raw.githubusercontent.com/RosettaCommons/rosetta/" + std::string("refs/heads/main") + "/database/";
+	//static std::string const github_prefix = "https://raw.githubusercontent.com/RosettaCommons/rosetta/" + utility::Version::commit() + "/database/";
+	TR << "Attempting to download database file `" << db_file << "` from Github" << std::endl;
+	std::string const url = github_prefix + db_file;
+	if ( download_file( url, db_file_full ) ) {
+		return true;
+	}
+	TR.Error << "Could not download `" << url << "` to local disk at `" << db_file_full << "`" << std::endl;
+	return false;
 }
 
 } // namespace database

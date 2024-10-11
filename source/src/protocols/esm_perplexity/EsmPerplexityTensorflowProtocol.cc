@@ -29,6 +29,7 @@
 #include <basic/Tracer.hh>
 #include <basic/database/open.hh>
 #include <basic/execute.hh>
+#include <basic/internet.hh>
 #include <basic/tensorflow_manager/RosettaTensorflowManager.hh>
 #include <basic/tensorflow_manager/RosettaTensorflowTensorContainer.tmpl.hh>
 #include <basic/options/option.hh>
@@ -420,18 +421,14 @@ EsmPerplexityTensorflowProtocol::download_model_if_not_existing( std::string con
 			std::string const tar_file = model_name + ".tar.gz";
 			TR.Info << "Downloading missing model files.... " << std::endl;
 			// TODO: remove certificate flag after updating ssl stuff on our gitlab
-			std::string message = "Downloading model from GitLab";
-			std::string command = "wget";
-			std::vector<std::string> args = {gitlab_url, "--progress=bar:force", "--no-check-certificate", "-O", tar_file};
-			basic::ExecutionResult result = basic::execute(message, command, args, false, true );
-			if ( result.result != 0 ) {
+			if ( ! basic::download_file( gitlab_url, tar_file ) ) {
 				utility_exit_with_message("Download failed. Please manually download the model from: " + gitlab_url + " , than extract the model directory to " + full_path_to_model );
 			}
 			TR.Info << "Model successfully downloaded." << std::endl;
-			message = "Extracting model files";
-			command = "tar";
-			args = {"-xf", tar_file};
-			result = basic::execute(message, command, args, false, false );
+			std::string message = "Extracting model files";
+			std::string command = "tar";
+			std::vector<std::string> args = {"-xf", tar_file};
+			basic::ExecutionResult result = basic::execute(message, command, args, false, false );
 			if ( result.result != 0 ) {
 				utility_exit_with_message( "Extraction failed. Please manually extract the model from the downloaded tar.gz file using: tar -xf " + tar_file );
 			}

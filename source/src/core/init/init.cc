@@ -1192,6 +1192,20 @@ locate_rosetta_database(){
 			TR << "Could not find database. Either specify -database or set environment variable ROSETTA3_DB." << std::endl;
 		}
 	}
+
+	// Handle turning on of download of missing database files.
+	if ( option[ in::path::database_download ].user() ) { // Explicit option overrides envionment variable
+		if ( option[ in::path::database_download ]() ) {
+			TR << "Downloading missing Rosetta database files to directory `" << option[ in::path::database ](1).name() << "`" << std::endl;
+		}
+	} else {
+		char * descr = getenv("ROSETTA3_DB_DOWNLOAD");
+		if ( descr ) {
+			TR << "Due to ROSETTA3_DB_DOWNLOAD being set, turning on download of missing Rosetta database files to directory " << option[ in::path::database ](1).name() << std::endl;
+			option[ in::path::database_download ].value( true );
+		}
+	}
+
 #endif
 }
 

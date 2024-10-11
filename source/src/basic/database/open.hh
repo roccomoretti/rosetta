@@ -96,6 +96,14 @@ full_cache_name(
 	bool for_writing
 );
 
+
+/// @brief If the settings to automatically download database files is set,
+/// handle the downloading of the file in cases where it's missing.
+/// Return true on success and false on failure
+bool
+handle_database_download( std::string const & db_file, std::string const & db_file_full );
+
+
 } // namespace database
 } // namespace basic
 
