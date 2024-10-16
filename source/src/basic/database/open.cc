@@ -27,6 +27,7 @@
 #include <utility/file/PathName.hh>
 #include <utility/excn/Exceptions.hh>
 #include <utility/version.hh>
+#include <utility/io/GeneralFileManager.hh>
 
 // C++ headers
 #include <cstdlib>
@@ -63,7 +64,7 @@ open(
 		db_stream.clear();
 	}
 	if ( db_file.length() == 0 ) {
-		throw CREATE_EXCEPTION(Exception, "Unable to open database file ''");
+		throw CREATE_EXCEPTION(BadInput, "Unable to open database file ''");
 		return false;
 	}
 
@@ -82,17 +83,25 @@ open(
 		std::stringstream err_msg;
 		err_msg
 			<< "Database file open failed for: \"" << db_file << "\"" << std::endl;
-		throw CREATE_EXCEPTION(Exception, err_msg.str());
-
-#ifdef __native_client__
-		throw( "ERROR: Database file open failed for: " + db_file );
-#endif
-		db_stream.close();
-		db_stream.clear();
+		throw CREATE_EXCEPTION(BadInput, err_msg.str());
 		return false;
 	}
 }
 
+
+std::string
+cached_open(
+	std::string const & db_file
+) {
+	return utility::io::GeneralFileManager::get_instance()->get_file_contents(
+		"DB::" + db_file, // Not cached by the full path
+		[db_file](){ // Lambda
+			utility::io::izstream db_stream;
+			open(db_stream, db_file);
+			return utility::stream_contents(db_stream);
+		}
+	);
+}
 
 /// @brief Full-path database file name
 std::string

@@ -349,9 +349,14 @@ pad_right( const T & t, platform::Size const newlen, char pad_width= ' '){
 bool is_string_numeric(std::string const & input);
 
 /// @brief Read the entire contents of a file into a string.  All end-of-line characters are replaced
-/// by "\n".  Throws a utility::excn::EXCN_msg_exception if the file cannot be opened.
+/// by "\n".  Throws a utility::excn::BadInput if the file cannot be opened.
 std::string
 file_contents( std::string const & file_name );
+
+/// @brief Read the entire contents of a stream into a string.  All end-of-line characters are replaced
+/// by "\n".  Throws a utility::excn::BadInput if the stream is bad
+std::string
+stream_contents( std::istream & instream );
 
 std::string
 file_basename( std::string const & full_path );

@@ -185,10 +185,11 @@ public:
 	void
 	add_weights_from_file( std::string const & filename );
 
-	/// @brief Initializes this ScoreFunction from the given  <filename>
-	/// no lookup in database directory
+	/// @brief Initializes this ScoreFunction from the given
+	/// filename or database tag.
+	/// File read-in is cached
 	void
-	_add_weights_from_file( std::string const & filename, bool patch=false );
+	_add_weights_from_file( std::string const & name, bool patch=false );
 
 	void
 	_add_weights_from_stream( std::istream & data, bool patch=false, std::string const & filename="");
@@ -1343,9 +1344,10 @@ deep_copy( ScoreFunction const & source) {
 /// @brief Utility function to locate a weights or patch file, either with a fully qualified path,
 /// in the local directory, or in the database. Names may be passes either with or without the
 /// optional extension.
+/// Returns the contents of the associated file
 
 std::string
-find_weights_file(std::string const & name, std::string const & extension=".wts");
+get_weights_file_contents(std::string const & name, std::string const & extension=".wts");
 
 } // namespace scoring
 } // namespace core

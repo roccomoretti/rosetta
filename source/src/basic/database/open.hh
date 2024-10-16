@@ -29,14 +29,9 @@
 namespace basic {
 namespace database {
 
-/// @brief Does a database file exist?
-/* Undefinded, commenting out to fix PyRosetta build
-bool
-exists(
-std::string const & db_file
-); */
-
 /// @brief Open a database file on a provided stream
+/// Throws a utility::excn::BadInput exception if the file can't be loaded.
+/// (bool return value is vestigal, and only ever returns true - failure is an exception)
 bool
 open(
 	utility::io::izstream & db_stream,
@@ -44,7 +39,19 @@ open(
 	bool warn = true
 );
 
+/// @brief Open a database file.
+/// Uses the utility::io::GeneralFileManager to make sure that the specified file is only ever read from disk once.
+/// Throws a utility::excn::BadInput exception if the file can't be loaded.
+std::string
+cached_open(
+	std::string const & db_file
+);
+
 /// @brief Full-path database file name
+/// NOTE: This function is provided primarily for debug output messages & interfacing with third party code which can't handle istreams.
+/// Due to caching/lazy downloads/alternate database file handling,
+/// don't use it for file existence checks -- just try to open (with warn=false) and
+/// look at the `izstream::good()` results.
 std::string
 full_name(
 	std::string const & db_file,

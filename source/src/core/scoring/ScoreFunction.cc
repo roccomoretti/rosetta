@@ -243,20 +243,29 @@ void ScoreFunction::perturb_weights() {
 void
 ScoreFunction::add_weights_from_file( std::string const & filename )
 {
-	_add_weights_from_file( find_weights_file(filename, ".wts") );
+	_add_weights_from_file( filename );
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-/// read weights/etc from file. Does not clear weights beforehand.
+/// read weights/etc from file (or database tag). Does not clear weights beforehand.
 /// no lookup in database directory
 
 void
-ScoreFunction::_add_weights_from_file( std::string const & filename, bool patch/*=false*/ )
+ScoreFunction::_add_weights_from_file( std::string const & name, bool patch/*=false*/ )
 {
-	std::string file_contents = utility::io::GeneralFileManager::get_instance()->get_file_contents( filename );
+	std::string prefix = "SFXN::";
+	std::string extension = ".wts";
+	if ( patch ) {
+		prefix = "SFXN_PATCH::";
+		extension = ".wts_patch";
+	}
+	std::string file_contents = utility::io::GeneralFileManager::get_instance()->get_file_contents(
+		prefix + name,
+		std::bind( get_weights_file_contents, name, extension ) // Called if not found
+	);
+
 	std::stringstream data( file_contents );
-	//utility::io::izstream data( filename );
-	_add_weights_from_stream(data, patch, filename);
+	_add_weights_from_stream(data, patch, name);
 }
 
 void
@@ -604,7 +613,7 @@ ScoreFunction::reset_energy_methods()
 void
 ScoreFunction::apply_patch_from_file( std::string const & patch_tag )
 {
-	_add_weights_from_file( find_weights_file(patch_tag, ".wts_patch"), /*patch=*/ true );
+	_add_weights_from_file( patch_tag, /*patch=*/ true );
 }
 
 
@@ -3493,32 +3502,40 @@ ScoreFunction::indicate_required_context_graphs(
 /// in the local directory, or in the database. Names may be passed either with or without the
 /// optional extension.
 std::string
-find_weights_file(std::string const & name, std::string const & extension/*=".wts"*/) {
+get_weights_file_contents(std::string const & name, std::string const & extension/*=".wts"*/) {
 	utility::io::izstream data( name );
 	if ( data.good() ) {
-		return name;
-	} else {
-		utility::io::izstream data2( name + extension );
-		if ( data2.good() ) {
-			return name + extension;
-		} else {
-			basic::database::open( data, "scoring/weights/"+name+extension, false );
-			if ( data.good() ) {
-				return basic::database::full_name( "scoring/weights/"+name+extension );
-			} else {
-				basic::database::open( data, "scoring/weights/"+name, false );
-				if ( data.good() ) {
-					return basic::database::full_name( "scoring/weights/"+name );
-				} else {
-					utility_exit_with_message( "Unable to open weights/patch file. None of (./)" + name + " or " +
-						"(./)" + name + extension + " or " +
-						basic::database::full_name( "scoring/weights/"+name, false )  + " or " +
-						basic::database::full_name( "scoring/weights/"+name+extension, false )  + " exist"  );
-					return "invalid"; // To make the compiler happy - should never reach here.
-				}
-			}
-		}
+		return utility::stream_contents( data );
 	}
+
+	data.open( name + extension );
+	if ( data.good() ) {
+		return utility::stream_contents( data );
+	}
+
+	try {
+		basic::database::open( data, "scoring/weights/"+name+extension, false );
+		if ( data.good() ) {
+			return utility::stream_contents( data );
+		}
+	} catch ( utility::excn::BadInput const & ) {
+		// Try below if file doesn't exist
+	}
+
+	try {
+		basic::database::open( data, "scoring/weights/"+name, false );
+		if ( data.good() ) {
+			return utility::stream_contents( data );
+		}
+	} catch ( utility::excn::BadInput const & ) {
+		// We use a different error handling below
+	}
+
+	utility_exit_with_message( "Unable to open weights/patch file. None of (./)" + name + " or " +
+		"(./)" + name + extension + " or " +
+		basic::database::full_name( "scoring/weights/"+name, false )  + " or " +
+		basic::database::full_name( "scoring/weights/"+name+extension, false )  + " exist"  );
+	return "invalid"; // To make the compiler happy - should never reach here.
 }
 
 /// @brief check order of methods

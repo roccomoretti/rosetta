@@ -27,6 +27,7 @@
 // C++ headers
 #include <map>
 #include <string>
+#include <functional>
 
 #ifdef MULTI_THREADED
 #include <utility/thread/ReadWriteMutex.hh>
@@ -44,6 +45,9 @@ public:
 
 	/// @brief File contents constructor.
 	GeneralFileContents( std::string const & filename );
+
+	/// @brief File contents constructor, with pre-specified contents
+	GeneralFileContents( std::string const & tag, std::string const & contents );
 
 	/// @brief Destructor.
 	~GeneralFileContents() override;
@@ -67,8 +71,14 @@ class GeneralFileManager : public utility::SingletonBase< GeneralFileManager > {
 public:
 
 	/// @brief Get a weights file.  Load it from disk if it has not already been loaded.
+	/// Throws a utility::excn::BadInput exception if the file can't be loaded.
 	/// @details Threadsafe and lazily loaded.
 	std::string const & get_file_contents( std::string const & filename ) const;
+
+	/// @brief Get file contents. Use the provided function to load it if it has not already been loaded.
+	/// Throws a utility::excn::BadInput exception if the data can't be loaded.
+	/// @details Primairly and implementation detail for basic::database::cached_open();
+	std::string const & get_file_contents( std::string const & tag, std::function< std::string() > ) const;
 
 private:
 

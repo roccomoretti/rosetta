@@ -542,18 +542,25 @@ bool is_string_numeric(std::string const & input)
 std::string
 file_contents( std::string const & file_name )
 {
-	vector1< std::string > text;
-	std::string line;
 	io::izstream textstream( file_name );
 	if ( ! textstream ) {
-		throw CREATE_EXCEPTION(excn::Exception, "Could not open file " + file_name  );
+		throw CREATE_EXCEPTION(excn::BadInput, "Could not open file " + file_name  );
 	}
+	return stream_contents( textstream );
+}
+
+std::string
+stream_contents( std::istream & textstream ) {
+	if ( ! textstream ) {
+		throw CREATE_EXCEPTION(excn::BadInput, "Bad stream" );
+	}
+	vector1< std::string > text;
+	std::string line;
 	platform::Size strsize( 0 );
 	while ( getline(textstream, line) ) {
 		text.push_back(line + "\n");
 		strsize += line.size() + 1;
 	}
-	textstream.close();
 
 	std::string alltext;
 	alltext.reserve( strsize );

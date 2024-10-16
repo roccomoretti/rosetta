@@ -46,6 +46,11 @@ GeneralFileContents::GeneralFileContents( std::string const & filename) :
 	file_contents_ = utility::file_contents( filename );
 }
 
+/// @brief File contents constructor, with pre-specified contents
+GeneralFileContents::GeneralFileContents( std::string const &, std::string const & contents ) :
+	file_contents_( contents )
+{}
+
 /// @brief Destructor.
 GeneralFileContents::~GeneralFileContents() {}
 
@@ -67,6 +72,17 @@ GeneralFileManager::get_file_contents(
 	return ptr->get_file_contents();
 }
 
+std::string const &
+GeneralFileManager::get_file_contents(
+	std::string const & tag,
+	std::function< std::string() > fetch
+) const {
+	std::function< GeneralFileContentsOP () > creator( [tag, fetch](){
+		return utility::pointer::make_shared< GeneralFileContents >( tag, fetch() );
+	}  );
+	auto ptr = utility::thread::safely_check_map_for_key_and_insert_if_absent( creator, SAFELY_PASS_MUTEX( io_script_mutex_ ), tag, filename_to_filecontents_map_ );
+	return ptr->get_file_contents();
+}
 // GeneralFileManager Private methods ////////////////////////////////////////////////////////////
 
 /// @brief Empty constructor.
