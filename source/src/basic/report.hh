@@ -17,7 +17,7 @@
 
 #include <basic/report.fwd.hh>
 
-#include <utility/json_spirit/json_spirit_value.h>
+#include <json.hpp> // nlohmann/json in external
 
 #include <string>
 #include <sstream>
@@ -34,7 +34,7 @@ class Report
 	std::string text_;
 
 	/// @brief store json data
-	utility::json_spirit::Object data_;
+	nlohmann::json data_;
 
 public:
 	Report(std::string const & file_name);
@@ -46,7 +46,7 @@ public:
 	Report& operator<<(T const &v) { std::ostringstream s; s << v;  text_+=s.str();  return *this; }
 
 	template <typename T>
-	void set(std::string const &key, T const &value) { data_.push_back( utility::json_spirit::Pair(key, value) ); }
+	void set(std::string const &key, T const &value) { data_[key] = value; }
 
 };
 

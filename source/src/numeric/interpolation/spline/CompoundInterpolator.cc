@@ -93,39 +93,38 @@ CompoundInterpolator::interpolate(
 	assert(false);
 }
 
-/// @brief serialize the Interpolator to a json_spirit object
-utility::json_spirit::Value CompoundInterpolator::serialize() const
+/// @brief serialize the Interpolator to a json object
+nlohmann::json CompoundInterpolator::serialize() const
 {
-	using utility::json_spirit::Value;
-	using utility::json_spirit::Pair;
-	std::vector<Value> interpolator_data;
+	std::vector< nlohmann::json > interpolator_data;
 	for ( auto const & it : interpolators_ ) {
-		Pair ub("ub",Value(it.ub));
-		Pair lb("lb",Value(it.lb));
-		Pair interpolator("interp",it.interp->serialize());
-		interpolator_data.emplace_back(utility::tools::make_vector(ub,lb,interpolator));
+		nlohmann::json inner {
+			{ "ub", it.ub },
+			{ "lb", it.lb },
+			{ "interp", it.interp->serialize() }
+		};
+		interpolator_data.emplace_back( std::move(inner) );
 	}
 
-	Pair inter_list("interp_list",Value(interpolator_data));
-	Pair base_data("base_data",Interpolator::serialize());
-
-	return Value(utility::tools::make_vector(inter_list,base_data));
+	nlohmann::json j {
+		{ "interp_list", interpolator_data },
+		{ "base_data", Interpolator::serialize() }
+	};
+	return j;
 
 }
 
-/// @brief deserialize a json_spirit object to a Interpolator
-void CompoundInterpolator::deserialize(utility::json_spirit::mObject data)
+/// @brief deserialize a json object to a Interpolator
+void CompoundInterpolator::deserialize(nlohmann::json const & data)
 {
 	interpolators_.clear();
-	utility::json_spirit::mArray interpolator_data(data["interp_list"].get_array());
-	for ( auto & it : interpolator_data ) {
-		utility::json_spirit::mObject interpolator_record(it.get_obj());
+	for ( auto & interpolator_record : data["interp_list"] ) {
 		InterpolatorOP current_interpolator( new SimpleInterpolator() );
-		current_interpolator->deserialize(interpolator_record["interp"].get_obj());
-		add_range(current_interpolator,data["lb"].get_real(),data["ub"].get_real());
+		current_interpolator->deserialize(interpolator_record["interp"]);
+		add_range(current_interpolator,data["lb"].get<Real>(),data["ub"].get<Real>());
 	}
 
-	Interpolator::deserialize(data["base_data"].get_obj());
+	Interpolator::deserialize(data["base_data"]);
 }
 
 bool CompoundInterpolator::operator == ( Interpolator const & other ) const

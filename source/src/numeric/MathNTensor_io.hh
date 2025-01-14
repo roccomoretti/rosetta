@@ -34,10 +34,8 @@
 #include <utility/file/file_sys_util.hh>
 #include <utility/string_util.hh>
 #include <utility/tools/make_vector.hh>
-#include <utility/json_spirit/json_spirit_tools.hh>
 
-#include <utility/json_spirit/json_spirit_reader.h> // AUTO IWYU For read_or_throw
-#include <utility/json_spirit/json_spirit_writer.h> // AUTO IWYU For write
+#include <json.hpp> // nlohmann/json in external
 
 namespace numeric {
 
@@ -52,10 +50,9 @@ template< class T, numeric::Size N >
 void
 read_tensor_from_file( std::string const & filename_input,
 	MathNTensor< T, N > & tensor,
-	utility::json_spirit::mObject & json )
+	nlohmann::json & json )
 {
 	using namespace utility;
-	using namespace utility::json_spirit;
 	using namespace utility::file;
 	std::string filename( filename_input ), filename_prefix( "" ), binary_file( "" );
 	bool use_binary( true );
@@ -80,13 +77,12 @@ read_tensor_from_file( std::string const & filename_input,
 	if ( !file::file_exists( json_file ) ) utility_exit_with_message( "Tensor_file should come with accompanying .json file" );
 
 	utility::io::izstream json_stream( json_file );
-	mValue json_data;
-	read_or_throw( json_stream, json_data );
+	json_stream >> json;
 	json_stream.close();
 
-	json = json_data.get_obj();
-	mArray n_bins( get_mArray( json, "n_bins" ) );
-	std::string const & type = get_string_or_empty( json, "type" );
+	nlohmann::json n_bins = json["nbins"];
+
+	std::string const & type = json.count("type") ? json["type"].get<std::string>() : "";
 	if ( ( type == "double" && !std::is_same<T,double>::value ) ||
 			( type == "uint64" && !std::is_same<T,uint64_t>::value ) ) {
 		utility_exit_with_message( filename+ " type in json " +type + " does not match requested tensor type." );
@@ -95,8 +91,8 @@ read_tensor_from_file( std::string const & filename_input,
 	Size tensor_size( 1 ), i( 0 );
 	utility::fixedsizearray1< Size, N > nbinsarray;
 	for ( auto n_bin : n_bins ) {
-		nbinsarray[++i] = n_bin.get_int();
-		tensor_size *= n_bin.get_int();
+		nbinsarray[++i] = n_bin.get<int>();
+		tensor_size *= n_bin.get<int>();
 	}
 
 	T * data =  new T[ tensor_size ];
@@ -126,7 +122,7 @@ template< class T, numeric::Size N >
 void
 read_tensor_from_file( std::string const & filename,
 	MathNTensor< T, N > & tensor ) {
-	utility::json_spirit::mObject json;
+	nlohmann::json json;
 	read_tensor_from_file( filename, tensor, json );
 }
 
@@ -148,10 +144,9 @@ template< class T, numeric::Size N >
 bool
 write_tensor_to_file( std::string const & filename,
 	MathNTensor< T, N > const & tensor,
-	utility::json_spirit::Value const & json_input )
+	nlohmann::json const & json_input )
 {
 	using namespace utility;
-	using namespace utility::json_spirit;
 	bool success = write_tensor_to_file_without_json( filename, tensor );
 	if ( !success ) return false;
 
@@ -161,10 +156,23 @@ write_tensor_to_file( std::string const & filename,
 	utility::io::ozstream json_out( json_file, std::ios::out );
 	if ( !json_out.good() ) return false;
 
-	// originally was going to plop in n_bins & type but these json_spirit classes are hard to manipulate.
-	Value json = json_input;
+	std::string type;
+	if ( std::is_same<T,double>::value )  type = "double";
+	else if ( std::is_same<T,Size>::value ) type = "uint64";
+	if ( type == "" ) utility_exit_with_message( "Did not have a string to go with the type of tensor, like double or unit64..." );
 
-	json_out << write( json ) << std::endl;
+	nlohmann::json j;
+	if ( json_input.is_object() ) {
+		j = json_input;
+	} else {
+		j = nlohmann::json::object();
+		j["data"] = json_input;
+	}
+
+	j["type"] = type;
+	j["n_bins"] = tensor.n_bins();
+
+	json_out << j << std::endl;
 	json_out.close();
 	return true;
 }
@@ -175,18 +183,8 @@ bool
 write_tensor_to_file( std::string const & filename,
 	MathNTensor< T, N > const & tensor )
 {
-	using namespace utility::json_spirit;
-	using namespace utility::tools;
-	std::vector< Value > n_bins;
-	for ( auto const & v : tensor.n_bins() ) n_bins.push_back( Value(boost::uint64_t(v)) );
-
-	std::string type;
-	if ( std::is_same<T,double>::value )  type = "double";
-	else if ( std::is_same<T,Size>::value ) type = "uint64";
-	if ( type == "" ) utility_exit_with_message( "Did not have a string to go with the type of tensor, like double or unit64..." );
-
-	return write_tensor_to_file( filename, tensor,
-		make_vector( Pair( "n_bins", n_bins ), Pair( "type", type ) ));
+	nlohmann::json json_data = nlohmann::json::object();
+	return write_tensor_to_file( filename, tensor, json_data );
 }
 
 

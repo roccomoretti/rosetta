@@ -57,10 +57,10 @@ public:
 
 	void interpolate( Real x, Real & y, Real & dy ) const override;
 
-	/// @brief serialize the Interpolator to a json_spirit object
-	utility::json_spirit::Value serialize() const override;
-	/// @brief deserialize a json_spirit object to a Interpolator
-	void deserialize(utility::json_spirit::mObject data) override;
+	/// @brief serialize the Interpolator to a json object
+	nlohmann::json serialize() const override;
+	/// @brief deserialize a json object to a Interpolator
+	void deserialize(nlohmann::json const & data) override;
 
 	bool operator == ( Interpolator const & other ) const override;
 	bool same_type_as_me( Interpolator const & other ) const override;

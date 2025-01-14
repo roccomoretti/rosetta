@@ -19,9 +19,9 @@
 
 #include <numeric/types.hh>
 
-#include <utility/json_spirit/json_spirit_value.h>
-
 #include <utility/VirtualBase.hh>
+
+#include <json.hpp>
 
 #ifdef    SERIALIZATION
 // Cereal headers
@@ -83,10 +83,10 @@ public:
 	/// @brief compute the y value of the lower bound function given an x value
 	void compute_ub_function_solution(numeric::Real x, numeric::Real & y) const;
 
-	/// @brief serialize the Interpolator to a json_spirit object
-	virtual utility::json_spirit::Value serialize() const;
-	/// @brief deserialize a json_spirit object to a Interpolator
-	virtual void deserialize(utility::json_spirit::mObject data);
+	/// @brief serialize the Interpolator to a json object
+	virtual nlohmann::json serialize() const;
+	/// @brief deserialize a json object to a Interpolator
+	virtual void deserialize(nlohmann::json const & data);
 
 	virtual bool operator == ( Interpolator const & other ) const;
 	virtual bool same_type_as_me( Interpolator const & other ) const;

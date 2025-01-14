@@ -120,39 +120,37 @@ void Interpolator::compute_ub_function_solution(Real x, Real & y) const
 }
 
 
-utility::json_spirit::Value Interpolator::serialize() const
+nlohmann::json Interpolator::serialize() const
 {
-	using utility::json_spirit::Value;
-	using utility::json_spirit::Pair;
+	nlohmann::json j {
+		{"lbfxn",has_lb_function_},
+		{"ubfxn",has_ub_function_},
 
-	Pair lb_fxn("lbfxn",Value(has_lb_function_));
-	Pair ub_fxn("ubfxn",Value(has_ub_function_));
+		{"lbcut",lb_cutoff_},
+		{"ubcut",ub_cutoff_},
 
-	Pair lb_cut("lbcut",Value(lb_cutoff_));
-	Pair ub_cut("ubcut",Value(ub_cutoff_));
+		{"lbslope",lb_slope_},
+		{"ubslope",ub_slope_},
 
-	Pair lb_slope("lbslope",Value(lb_slope_));
-	Pair ub_slope("ubslope",Value(ub_slope_));
-
-	Pair lb_int("lbint",Value(lb_intercept_));
-	Pair ub_int("ubint",Value(ub_intercept_));
-
-	return Value(utility::tools::make_vector(lb_fxn,ub_fxn,lb_cut,ub_cut,lb_slope,ub_slope,lb_int,ub_int));
+		{"lbint",lb_intercept_},
+		{"ubint",ub_intercept_}
+	};
+	return j;
 }
 
-void Interpolator::deserialize(utility::json_spirit::mObject data)
+void Interpolator::deserialize(nlohmann::json const & data)
 {
-	has_lb_function_ = data["lbfxn"].get_bool();
-	has_ub_function_ = data["ubfxn"].get_bool();
+	has_lb_function_ = data["lbfxn"].get<bool>();
+	has_ub_function_ = data["ubfxn"].get<bool>();
 
-	lb_cutoff_ = data["lbcut"].get_real();
-	ub_cutoff_ = data["ubcut"].get_real();
+	lb_cutoff_ = data["lbcut"].get<Real>();
+	ub_cutoff_ = data["ubcut"].get<Real>();
 
-	lb_slope_ = data["lbslope"].get_real();
-	ub_slope_ = data["ubslope"].get_real();
+	lb_slope_ = data["lbslope"].get<Real>();
+	ub_slope_ = data["ubslope"].get<Real>();
 
-	lb_intercept_ = data["lbint"].get_real();
-	ub_intercept_ = data["ubint"].get_real();
+	lb_intercept_ = data["lbint"].get<Real>();
+	ub_intercept_ = data["ubint"].get<Real>();
 
 }
 

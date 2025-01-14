@@ -18,8 +18,9 @@
 #include <core/id/AtomID.fwd.hh>
 
 #include <utility/exit.hh>
-#include <utility/json_spirit/json_spirit_value.h>
 #include <utility/tools/make_vector.hh>
+
+#include <json.hpp>
 
 // C++ headers
 
@@ -102,19 +103,21 @@ public: // Properties
 	bool
 	valid() const { return ( atomno_ > 0 ) && ( rsd_ > 0 ); }
 
-	/// @brief serialize an AtomID to a json_spirit object
+	/// @brief serialize an AtomID to a json object
 	inline
-	utility::json_spirit::Value serialize() const {
-		utility::json_spirit::Pair atomno("atomno", utility::json_spirit::Value(static_cast<uint64_t>(atomno_)));
-		utility::json_spirit::Pair rsd("rsd", utility::json_spirit::Value(static_cast<uint64_t>(rsd_)));
-		return utility::json_spirit::Value(utility::tools::make_vector(atomno,rsd));
+	nlohmann::json serialize() const {
+		nlohmann::json j {
+			{ "atomno", atomno_ },
+			{ "rsd", rsd_ }
+		};
+		return j;
 	}
 
-	/// @brief deserialize a json_spirit object to an AtomID
+	/// @brief deserialize a json object to an AtomID
 	inline
-	void deserialize(utility::json_spirit::mObject data) {
-		atomno_ = static_cast<Size>(data["atomno"].get_uint64());
-		rsd_    = static_cast<Size>(data["rsd"].get_uint64());
+	void deserialize(nlohmann::json const & data) {
+		atomno_ = data["atomno"].get<Size>();
+		rsd_    = data["rsd"].get<Size>();
 	}
 
 public: // Friends

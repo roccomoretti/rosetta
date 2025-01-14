@@ -21,7 +21,6 @@
 
 #include <utility/vector0.hh>
 #include <utility/tools/make_vector.hh>
-#include <utility/json_spirit/json_spirit_value.h>
 #include <utility/VirtualBase.hh>
 #include <utility/pointer/owning_ptr.hh>
 #include <utility/io/izstream.hh>
@@ -29,6 +28,8 @@
 #include <utility/Binary_Util.hh>
 
 #include <ObjexxFCL/string.functions.hh>
+
+#include <json.hpp>
 
 #include <algorithm>
 #include <sstream>
@@ -391,60 +392,56 @@ public:
 		return true;
 	}
 
-	utility::json_spirit::Value serialize() const
+	nlohmann::json serialize() const
 	{
-		using utility::json_spirit::Pair;
-		using utility::json_spirit::Value;
-		using utility::json_spirit::Array;
-		Pair name("name",this->get_name());
-
-		Pair base("base",utility::tools::make_vector(Value(this->bX_),Value(this->bY_),Value(this->bZ_)));
-		// Need explicit conversion to int here, as utility::json_spirit::Value doesn't have a constructor for size_t.
-		Pair size("size",utility::tools::make_vector(Value(int(this->nX_)),Value(int(this->nY_)),Value(int(this->nZ_))));
-		Pair length("length",utility::tools::make_vector(Value(this->lX_),Value(this->lY_),Value(this->lZ_)));
 
 		std::string point_data;
 		// vector::data() gives a raw pointer to the underlying (contigous) array.
 		debug_assert( npoints_ == zones_.size() );
 		utility::encode6bit( (unsigned char*)zones_.data(), npoints_*sizeof(T), point_data );
 
-		utility::json_spirit::Pair data("data",Value(point_data));
-
-		return utility::json_spirit::Value( utility::tools::make_vector(name,base,size,length,data) );
+		nlohmann::json j {
+			{ "name", this->get_name() },
+			{ "base", utility::tools::make_vector(this->bX_,this->bY_,this->bZ_) },
+			{ "size", utility::tools::make_vector(int(this->nX_),int(this->nY_),int(this->nZ_)) },
+			{ "length", utility::tools::make_vector(this->lX_,this->lY_,this->lZ_) },
+			{ "data", point_data }
+		};
+		return j;
 
 	}
 
-	void deserialize(utility::json_spirit::mObject grid_data)
+	void deserialize(nlohmann::json const & grid_data)
 	{
-		std::string name = grid_data["name"].get_str();
+		std::string name = grid_data["name"].get< std::string >();
 
-		utility::json_spirit::mArray base_data = grid_data["base"].get_array();
+		auto base_data = grid_data["base"].get< std::vector< core::Real > >();
 		debug_assert(base_data.size() == 3);
 
-		core::Real bX = base_data[0].get_real();
-		core::Real bY = base_data[1].get_real();
-		core::Real bZ = base_data[2].get_real();
+		core::Real bX = base_data[0];
+		core::Real bY = base_data[1];
+		core::Real bZ = base_data[2];
 
-		utility::json_spirit::mArray size_data = grid_data["size"].get_array();
+		auto size_data = grid_data["size"].get< std::vector<int> >();
 		debug_assert(size_data.size() == 3);
 
-		int nX = size_data[0].get_int();
-		int nY = size_data[1].get_int();
-		int nZ = size_data[2].get_int();
+		int nX = size_data[0];
+		int nY = size_data[1];
+		int nZ = size_data[2];
 
-		utility::json_spirit::mArray length_data = grid_data["length"].get_array();
+		auto length_data = grid_data["length"].get< std::vector< core::Real > >();
 		debug_assert(length_data.size() == 3);
 
-		core::Real lX = length_data[0].get_real();
-		core::Real lY = length_data[1].get_real();
-		core::Real lZ = length_data[2].get_real();
+		core::Real lX = length_data[0];
+		core::Real lY = length_data[1];
+		core::Real lZ = length_data[2];
 
 		this->set_name(name);
 		this->setBase(bX,bY,bZ);
 		this->setDimensions(nX, nY, nZ, lX, lY, lZ);
 		this->setupZones();
 
-		std::string point_data = grid_data["data"].get_str();
+		std::string point_data = grid_data["data"].get< std::string >();
 
 		// Why do we do the dance where we resize too big, decode, and then re-resize?
 		// Because we use a function which does a 4->3 transformation on the input data

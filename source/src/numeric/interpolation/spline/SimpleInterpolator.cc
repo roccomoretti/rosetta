@@ -65,59 +65,24 @@ SimpleInterpolator::interpolate( Real x, Real & y, Real & dy ) const {
 	return spline_interpolate(x_,y_,ddy_,x,y,dy);
 }
 
-utility::json_spirit::Value SimpleInterpolator::serialize() const
+nlohmann::json SimpleInterpolator::serialize() const
 {
-	using utility::json_spirit::Value;
-	using utility::json_spirit::Pair;
-
-	std::vector<Value> x_values,y_values,ddy_values;
-
-	for ( double it : x_ ) {
-		x_values.emplace_back(it);
-	}
-
-	for ( double it : y_ ) {
-		y_values.emplace_back(it);
-	}
-
-	for ( double it : ddy_ ) {
-		ddy_values.emplace_back(it);
-	}
-
-	Pair x_data("xdata",x_values);
-	Pair y_data("ydata",y_values);
-	Pair ddy_data("ddydata",ddy_values);
-
-	Pair base_data("base_data",Interpolator::serialize());
-
-	return Value(utility::tools::make_vector(x_data,y_data,ddy_data,base_data));
-
+	nlohmann::json j {
+		{ "xdata", x_ },
+		{ "ydata", y_ },
+		{ "ddydata", ddy_ },
+		{ "base_data", Interpolator::serialize() }
+	};
+	return j;
 }
 
-void SimpleInterpolator::deserialize(utility::json_spirit::mObject data)
+void SimpleInterpolator::deserialize(nlohmann::json const & data)
 {
-	utility::json_spirit::mArray x_data(data["xdata"].get_array());
-	utility::json_spirit::mArray y_data(data["ydata"].get_array());
-	utility::json_spirit::mArray ddy_data(data["ddydata"].get_array());
+	x_ = data["xdata"].get< std::vector<Real> >();
+	y_ = data["ydata"].get< std::vector<Real> >();
+	ddy_ = data["ddydata"].get< std::vector<Real> >();
 
-	x_.clear();
-	y_.clear();
-	ddy_.clear();
-
-	for ( auto & it : x_data ) {
-		x_.push_back(it.get_real());
-	}
-
-	for ( auto & it : y_data ) {
-		y_.push_back(it.get_real());
-	}
-
-	for ( auto & it : ddy_data ) {
-		ddy_.push_back(it.get_real());
-	}
-
-	Interpolator::deserialize(data["base_data"].get_obj());
-
+	Interpolator::deserialize(data["base_data"]);
 }
 
 bool SimpleInterpolator::operator == ( Interpolator const & other ) const

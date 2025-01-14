@@ -14,13 +14,12 @@
 
 // mini headers
 #include <core/io/raw_data/ScoreStructJSON.hh>
-#include <utility/json_spirit/json_spirit_writer.h>
 #include <core/pose/Pose.hh>
+
+#include <json.hpp>
 
 // C++ Headers
 #include <map>
-
-#include <utility/json_spirit/json_spirit_writer_options.h> // AUTO IWYU For remove_trailing_zeros
 
 namespace core {
 namespace io {
@@ -36,26 +35,23 @@ void ScoreStructJSON::print_scores(
 	std::map < std::string, std::string > const & string_map
 ) const
 {
-	using utility::json_spirit::Pair;
-
-	utility::json_spirit::Object record;
+	nlohmann::json record = nlohmann::json::object();
 
 	// Meta data
 	if ( !decoy_tag_.empty() ) {
-		record.push_back( Pair( "decoy", decoy_tag_ ) );
+		record["decoy"] = decoy_tag_;
 	}
 
 	// Scores
 	for ( auto const & it : score_map ) {
-		record.push_back( Pair( it.first, it.second ) );
+		record[ it.first ] = it.second;
 	}
 
 	for ( auto const & it : string_map ) {
-		record.push_back( Pair( it.first, it.second ) );
+		record[it.first] = it.second;
 	}
 
-	utility::json_spirit::write( utility::json_spirit::Value( record ), out, utility::json_spirit::remove_trailing_zeros );
-	out << std::endl;
+	out << record << std::endl;
 
 } // print_scores
 

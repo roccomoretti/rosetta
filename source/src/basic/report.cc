@@ -13,11 +13,7 @@
 
 #include <basic/report.hh>
 
-#include <utility/json_spirit/json_spirit_writer.h>
-
 #include <fstream>
-
-#include <utility/json_spirit/json_spirit_writer_options.h> // AUTO IWYU For pretty_print
 
 using std::string;
 
@@ -37,7 +33,7 @@ Report::~Report()
 void Report::write()
 {
 	std::ofstream ft( (file_name_+".txt").c_str() ); ft << text_;
-	std::ofstream fj( (file_name_+".json").c_str() ); fj << utility::json_spirit::write(data_, utility::json_spirit::pretty_print);
+	std::ofstream fj( (file_name_+".json").c_str() ); fj << data_.dump(/*indent=*/4);
 }
 
 

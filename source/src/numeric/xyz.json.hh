@@ -16,7 +16,7 @@
 #include <numeric/xyzVector.hh>
 
 #include <utility/tools/make_vector.hh>
-#include <utility/json_spirit/json_spirit_value.h>
+
 #include <json.hpp>
 
 
@@ -41,27 +41,28 @@ void from_json(const nlohmann::json& j, xyzVector<T>& v) {
 	v.z() = j.at(2).get<T>();
 }
 
-/// @brief Convert vector to a json_spirit Value
+
+/// @brief Convert vector to a json array
 /// @note Format is a list in the form [x,y,z]
 template<typename T>
 inline
-utility::json_spirit::Value serialize(xyzVector<T> coords)
+nlohmann::json serialize(xyzVector<T> const & coords)
 {
-	utility::json_spirit::Value x(coords.x());
-	utility::json_spirit::Value y(coords.y());
-	utility::json_spirit::Value z(coords.z());
-
-	return utility::json_spirit::Value(utility::tools::make_vector(x,y,z));
+	nlohmann::json j = nlohmann::json::array();
+	j.push_back(coords.x());
+	j.push_back(coords.y());
+	j.push_back(coords.z());
+	return j;
 }
 
 template<typename T>
 inline
-xyzVector<T> deserialize(utility::json_spirit::mArray data)
+xyzVector<T> deserialize(nlohmann::json const & data)
 {
 	xyzVector<T> coords;
-	coords.x(data[0].get_value<T>());
-	coords.y(data[1].get_value<T>());
-	coords.z(data[2].get_value<T>());
+	coords.x(data.at(0).get<T>());
+	coords.y(data.at(1).get<T>());
+	coords.z(data.at(2).get<T>());
 	return coords;
 }
 
