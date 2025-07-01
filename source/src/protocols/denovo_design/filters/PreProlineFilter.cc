@@ -247,7 +247,9 @@ PreProlineFilter::setup_spline()
 	// read in training data if necessary
 	static std::string const dbfile = "protocol_data/denovo_design/preproline_normalized.gz";
 	utility::io::izstream infile( dbfile );
-	if ( ! basic::database::open( infile, dbfile ) ) {
+	try {
+		basic::database::open( infile, dbfile );
+	} catch ( utility::excn::IOError const & ) {
 		std::stringstream err;
 		err << "Pre-proline filter could not open database file " << dbfile << std::endl;
 		throw CREATE_EXCEPTION(utility::excn::Exception,  err.str() );

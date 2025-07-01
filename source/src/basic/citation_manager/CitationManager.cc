@@ -29,6 +29,7 @@
 // Utility headers
 #include <utility/string_util.hh>
 #include <utility/pointer/memory.hh>
+#include <utility/io/izstream.hh>
 
 // Basic headers
 #include <basic/Tracer.hh>
@@ -191,10 +192,12 @@ CitationManager::get_citation_by_doi(
 /// once!
 void
 CitationManager::load_rosetta_citations_from_database() {
-	std::string const filename( basic::database::full_name( "citations/rosetta_citations.txt" ) );
-	std::string const file_contents( utility::file_contents( filename ) );
+	std::string const db_filename( "citations/rosetta_citations.txt" );
+	utility::io::izstream citations;
+	basic::database::open( citations, db_filename );
+	std::string const file_contents( utility::stream_contents( citations ) );
 	debug_assert( !file_contents.empty() );
-	TR.Debug << "Read Rosetta citations from " << filename << "." << std::endl;
+	TR.Debug << "Read Rosetta citations from " << basic::database::full_name(db_filename) << "." << std::endl;
 	populate_doi_rosetta_citation_map( file_contents );
 }
 

@@ -231,7 +231,9 @@ HBondDatabase::initialize_HBFadeInterval()
 	string HBFadeInterval_fname = "scoring/score_functions/hbonds/" + params_database_tag_ + "/HBFadeIntervals.csv";
 
 	izstream s;
-	if ( !open(s, HBFadeInterval_fname) ) {
+	try {
+		open(s, HBFadeInterval_fname);
+	} catch (utility::excn::IOError const & ) {
 		stringstream message;
 		message << "Unable to open hbond parameter file HBFadeInterval:" << endl;
 		message << "'" << HBFadeInterval_fname << "'";
@@ -306,7 +308,9 @@ HBondDatabase::initialize_HBPoly1D()
 	string HBPoly1D_fname = "scoring/score_functions/hbonds/" + params_database_tag_ + "/HBPoly1D.csv";
 
 	izstream s;
-	if ( !open(s, HBPoly1D_fname) ) {
+	try {
+		open(s, HBPoly1D_fname);
+	} catch (utility::excn::IOError const & ) {
 		stringstream message;
 		message << "Unable to open hbond parameter file HBPoly1D:" << endl;
 		message << HBPoly1D_fname;
@@ -662,9 +666,11 @@ HBondDatabase::initialize_don_strength() {
 	izstream s;
 
 	bool open_failed( true );
-	if ( file_exists( full_name( don_strength_fname, false /*warn*/ ) ) ) {
+	try {
+		open(s, don_strength_fname);
 		open_failed = false;
-		open(s, don_strength_fname, false);
+	} catch (utility::excn::IOError const & ) {
+		open_failed = true;
 	}
 
 	if ( !open_failed ) {
@@ -741,9 +747,11 @@ HBondDatabase::initialize_acc_strength() {
 	izstream s;
 
 	bool open_failed( true );
-	if ( file_exists( full_name( acc_strength_fname, false /*warn*/ ) ) ) {
+	try {
+		open(s, acc_strength_fname);
 		open_failed = false;
-		open(s, acc_strength_fname, false);
+	} catch (utility::excn::IOError const & ) {
+		open_failed = true;
 	}
 
 	if ( !open_failed ) {

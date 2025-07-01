@@ -968,15 +968,12 @@ Ramachandran::read_rama(
 	utility::io::izstream  iunit;
 
 	// search in the local directory first
-	iunit.open( rama_map_filename );
-
-	if ( !iunit.good() ) {
-		iunit.close();
-		if ( !basic::database::open( iunit, rama_map_filename ) ) {
-			std::stringstream err_msg;
-			err_msg << "Unable to open Ramachandran map '" << rama_map_filename << "'.";
-			utility_exit_with_message(err_msg.str());
-		}
+	try {
+		basic::database::open_with_local( iunit, rama_map_filename );
+	} catch ( utility::excn::IOError const & ) {
+		std::stringstream err_msg;
+		err_msg << "Unable to open Ramachandran map '" << rama_map_filename << "'.";
+		utility_exit_with_message(err_msg.str());
 	}
 
 	//cj      std::cout << "index" << "aa" << "ramachandran entropy" << std::endl;
@@ -1073,15 +1070,12 @@ Ramachandran::load_custom_rama_table(
 	utility::io::izstream iunit;
 
 	// search in the local directory first
-	iunit.open( filename );
-
-	if ( !iunit.good() ) {
-		iunit.close();
-		if ( !basic::database::open( iunit, filename ) ) {
-			std::stringstream err_msg("");
-			err_msg << "Unable to open custom Ramachandran map \"" << filename << "\".";
-			utility_exit_with_message(err_msg.str());
-		}
+	try {
+		basic::database::open_with_local( iunit, filename );
+	} catch ( utility::excn::IOError const & ) {
+		std::stringstream err_msg("");
+		err_msg << "Unable to open custom Ramachandran map \"" << filename << "\".";
+		utility_exit_with_message(err_msg.str());
 	}
 
 	if ( TR.visible() ) {

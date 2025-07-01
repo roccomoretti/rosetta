@@ -3514,7 +3514,7 @@ get_weights_file_contents(std::string const & name, std::string const & extensio
 	}
 
 	try {
-		basic::database::open( data, "scoring/weights/"+name+extension, false );
+		basic::database::open( data, "scoring/weights/"+name+extension );
 		if ( data.good() ) {
 			return utility::stream_contents( data );
 		}
@@ -3523,7 +3523,7 @@ get_weights_file_contents(std::string const & name, std::string const & extensio
 	}
 
 	try {
-		basic::database::open( data, "scoring/weights/"+name, false );
+		basic::database::open( data, "scoring/weights/"+name );
 		if ( data.good() ) {
 			return utility::stream_contents( data );
 		}

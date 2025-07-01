@@ -47,15 +47,13 @@ read_cp_tables_from_db(
 
 	// search in the local directory first
 	utility::io::izstream iunit;
-	iunit.open( filename );
 
-	if ( !iunit.good() ) {
-		iunit.close();
-		if ( !basic::database::open( iunit, filename ) ) {
-			std::stringstream err_msg;
-			err_msg << "Unable to open fa_elec countpair groups '" << filename << "'.";
-			utility_exit_with_message(err_msg.str());
-		}
+	try {
+		basic::database::open_with_local( iunit, filename );
+	} catch ( utility::excn::IOError const & ) {
+		std::stringstream err_msg;
+		err_msg << "Unable to open fa_elec countpair groups '" << filename << "'.";
+		utility_exit_with_message(err_msg.str());
 	}
 
 	std::string line;

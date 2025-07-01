@@ -29,26 +29,38 @@
 namespace basic {
 namespace database {
 
-/// @brief Open a database file on a provided stream
-/// Throws a utility::excn::BadInput exception if the file can't be loaded.
-/// (bool return value is vestigal, and only ever returns true - failure is an exception)
-bool
+/// @brief Open a file from the database on a provided stream
+/// File is a location relative to the paths on -in:path:database
+/// Local directories will not be consulted.
+/// Throws a utility::excn::IOError exception if the file can't be loaded.
+void
 open(
 	utility::io::izstream & db_stream,
-	std::string const & db_file,
-	bool warn = true
+	std::string const & db_file
 );
 
-/// @brief Open a database file.
+/// @brief Open a file from the database and returns its contents
+/// File is a location relative to the paths on -in:path:database
+/// Local directories will not be consulted.
+/// Throws a utility::excn::IOError exception if the file can't be loaded.
+std::string
+open(
+	std::string const & db_file
+);
+
+/// @brief Open a file from the database and returns its contents
 /// Uses the utility::io::GeneralFileManager to make sure that the specified file is only ever read from disk once.
-/// Throws a utility::excn::BadInput exception if the file can't be loaded.
+/// File is a location relative to the paths on -in:path:database
+/// Local directories will not be consulted.
+/// Throws a utility::excn::IOError exception if the file can't be loaded.
 std::string
 cached_open(
 	std::string const & db_file
 );
 
 /// @brief Full-path database file name
-/// NOTE: This function is provided primarily for debug output messages & interfacing with third party code which can't handle istreams.
+/// The paths of -in:path:database will be consulted to find the first existing option
+/// @details NOTE: This function is provided primarily for debug output messages & interfacing with third party code which need the filename itself
 /// Due to caching/lazy downloads/alternate database file handling,
 /// don't use it for file existence checks -- just try to open (with warn=false) and
 /// look at the `izstream::good()` results.
@@ -57,6 +69,17 @@ full_name(
 	std::string const & db_file,
 	bool warn = true
 );
+
+/// @brief Open a file from the local directory or the database on a provided stream
+/// File is a location relative to the working dirtectory or the paths on -in:path:database
+/// Local directory files are preferred.
+/// Throws a utility::excn::IOError exception if the file can't be loaded.
+void
+open_with_local(
+	utility::io::izstream & db_stream,
+	std::string const & db_file
+);
+
 
 /// @brief Find a path to a file.
 ///
@@ -104,9 +127,9 @@ full_cache_name(
 );
 
 
-/// @brief If the settings to automatically download database files is set,
-/// handle the downloading of the file in cases where it's missing.
-/// Return true on success and false on failure
+/// @brief Utility function for when the settings to automatically download database files is set.
+/// Handle the downloading of the file in cases where it's missing.
+/// Returns true on success and false on failure
 bool
 handle_database_download( std::string const & db_file, std::string const & db_file_full );
 

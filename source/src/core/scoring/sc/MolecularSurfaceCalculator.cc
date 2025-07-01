@@ -250,7 +250,9 @@ int MolecularSurfaceCalculator::ReadScRadii()
 	ATOM_RADIUS radius;
 	utility::io::izstream in;
 
-	if ( !basic::database::open(in, fn) ) {
+	try {
+		basic::database::open(in, fn);
+	} catch ( utility::excn::IOError const & ) {
 		TR.Error << "Failed to read " << fn << std::endl;
 		return 0;
 	}

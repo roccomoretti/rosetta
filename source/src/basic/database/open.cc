@@ -46,48 +46,59 @@ static basic::Tracer TR( "basic.io.database" );
 
 
 /// @brief Open a database file on a provided stream
-bool
+void
 open(
 	utility::io::izstream & db_stream,
-	std::string const & db_file,
-	bool warn /* = true */
+	std::string const & db_file
 )
 {
 	using namespace utility::excn;
 	using namespace basic::options;
 	using namespace basic::options::OptionKeys;
 
-	warn = warn && ! option[ in::path::database_download ]();
-
 	if ( db_stream.good() ) {
 		db_stream.close();
 		db_stream.clear();
 	}
 	if ( db_file.length() == 0 ) {
-		throw CREATE_EXCEPTION(BadInput, "Unable to open database file ''");
-		return false;
+		throw CREATE_EXCEPTION(IOError, "Unable to open database file ''");
 	}
 
-	std::string db_file_full = full_name( db_file, warn );
+	std::string db_file_full = full_name( db_file, false ); // Don't warn, as we'll error out when opening anyway
 
 	db_stream.open( db_file_full );
 
 	if ( db_stream ) { // Open succeeded
 		TR << "Database file opened: " << db_file << std::endl;
-		return true;
-	} else { // Open failed
-		if ( option[ in::path::database_download ]() ) {
-			return handle_database_download( db_file, db_file_full );
-		}
-
-		std::stringstream err_msg;
-		err_msg
-			<< "Database file open failed for: \"" << db_file << "\"" << std::endl;
-		throw CREATE_EXCEPTION(BadInput, err_msg.str());
-		return false;
+		return;
 	}
+
+	// Open failed
+
+	if ( option[ in::path::database_download ]() ) {
+		if ( handle_database_download( db_file, db_file_full ) ) {
+			db_stream.open( db_file_full );
+			if ( db_stream ) {
+				TR << "Database file opened: " << db_file << std::endl;
+				return;
+			}
+		}
+	}
+
+	std::stringstream err_msg;
+	err_msg
+		<< "Database file open failed for: \"" << db_file << "\"" << std::endl;
+	throw CREATE_EXCEPTION(IOError, err_msg.str());
 }
 
+std::string
+open(
+	std::string const & db_file
+) {
+	utility::io::izstream db_stream;
+	open(db_stream, db_file);
+	return utility::stream_contents(db_stream);
+}
 
 std::string
 cached_open(
@@ -95,12 +106,30 @@ cached_open(
 ) {
 	return utility::io::GeneralFileManager::get_instance()->get_file_contents(
 		"DB::" + db_file, // Not cached by the full path
-		[db_file](){ // Lambda
-			utility::io::izstream db_stream;
-			open(db_stream, db_file);
-			return utility::stream_contents(db_stream);
-		}
+		[db_file](){ return open(db_file); } // lambda
 	);
+}
+
+void
+open_with_local(
+	utility::io::izstream & db_stream,
+	std::string const & db_file
+) {
+	if ( db_stream.good() ) {
+		db_stream.close();
+		db_stream.clear();
+	}
+	if ( db_file.length() == 0 ) {
+		throw CREATE_EXCEPTION(utility::excn::IOError, "Unable to open database file ''");
+	}
+
+	db_stream.open( db_file );
+	if ( db_stream.good() ) {
+		return; // We've loaded the local version
+	}
+
+	// Else fall back to the database
+	open( db_stream, db_file );
 }
 
 /// @brief Full-path database file name
@@ -301,11 +330,11 @@ handle_database_download( std::string const & db_file, std::string const & db_fi
 	//static std::string const github_prefix = "https://raw.githubusercontent.com/RosettaCommons/rosetta/" + utility::Version::commit() + "/database/";
 	TR << "Attempting to download database file `" << db_file << "` from Github" << std::endl;
 	std::string const url = github_prefix + db_file;
-	if ( download_file( url, db_file_full ) ) {
-		return true;
+	if ( !download_file( url, db_file_full ) ) {
+		TR.Error << "Could not download `" << url << "` to local disk at `" << db_file_full << "`" << std::endl;
+		return false;
 	}
-	TR.Error << "Could not download `" << url << "` to local disk at `" << db_file_full << "`" << std::endl;
-	return false;
+	return true;
 }
 
 } // namespace database
