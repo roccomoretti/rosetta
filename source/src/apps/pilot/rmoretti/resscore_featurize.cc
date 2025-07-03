@@ -282,14 +282,14 @@ public:
 
 						// Bit better coherence -- always put hydrogens second
 						if ( ii_res.atom_is_hydrogen(ai) && ! jj_res.atom_is_hydrogen(aj) ) {
-							bonds_.push_back( {respair_idx, aj_idx, ai_idx, dist} );
+							bonds_.push_back( {dist, respair_idx, aj_idx, ai_idx} );
 						} else {
 							// TODO: Should we permute the order here?
-							bonds_.push_back( {respair_idx, ai_idx, aj_idx, dist} );
+							bonds_.push_back( {dist, respair_idx, ai_idx, aj_idx} );
 						}
 
-						add_angles( respair_idx, ii_res, ai, jj_res, aj, true );
-						add_angles( respair_idx, jj_res, aj, ii_res, ai, false );
+						add_angles( respair_idx, ii_res, ai, jj_res, aj, dist, true );
+						add_angles( respair_idx, jj_res, aj, ii_res, ai, dist, false );
 					}
 				}
 			}
@@ -337,7 +337,7 @@ public:
 	}
 
 	void
-	add_angles( core::Real respair_idx, core::conformation::Residue const & res, core::Size aa, core::conformation::Residue const & res2, core::Size bb, bool sym = false) {
+	add_angles( core::Real respair_idx, core::conformation::Residue const & res, core::Size aa, core::conformation::Residue const & res2, core::Size bb, core::Real dist, bool sym = false) {
 		for ( core::Size base: res.bonded_neighbor(aa) ) {
 			if ( res.atom_is_hydrogen(base) || res.is_virtual(base) ) { continue; }
 			core::Real base_idx = get_atom_index(res.seqpos(), base);
@@ -347,7 +347,7 @@ public:
 
 			core::Real aa_idx = get_atom_index(res.seqpos(), aa); // Already validated
 			core::Real bb_idx = get_atom_index(res2.seqpos(), bb);
-			angles_.push_back( {respair_idx, base_idx, aa_idx, bb_idx, angle} );
+			angles_.push_back( {angle, dist, respair_idx, base_idx, aa_idx, bb_idx} );
 
 			// Asymmetric torsions
 			for ( core::Size base2: res.bonded_neighbor(base) ) {
@@ -357,7 +357,7 @@ public:
 				if ( base2_idx < 0 ) { continue; }
 
 				core::Real torsion = numeric::dihedral_degrees( res.xyz(base2), res.xyz(base), res.xyz(aa), res2.xyz(bb) );
-				asym_torsions_.push_back( {respair_idx, base2_idx, base_idx, aa_idx, bb_idx, torsion} );
+				asym_torsions_.push_back( {torsion, dist, respair_idx, base2_idx, base_idx, aa_idx, bb_idx} );
 			}
 
 			if ( sym ) {
@@ -369,9 +369,9 @@ public:
 
 					core::Real torsion = numeric::dihedral_degrees( res.xyz(base), res.xyz(aa), res2.xyz(bb), res2.xyz(baseb) );
 					if ( res.atom_is_hydrogen(aa) && ! res2.atom_is_hydrogen(bb) ) {
-						sym_torsions_.push_back( {respair_idx, baseb_idx, bb_idx, aa_idx, base_idx, torsion} );
+						sym_torsions_.push_back( {torsion, dist, respair_idx, baseb_idx, bb_idx, aa_idx, base_idx} );
 					} else {
-						sym_torsions_.push_back( {respair_idx, base_idx, aa_idx, bb_idx, baseb_idx, torsion} );
+						sym_torsions_.push_back( {torsion, dist, respair_idx, base_idx, aa_idx, bb_idx, baseb_idx} );
 					}
 				}
 
