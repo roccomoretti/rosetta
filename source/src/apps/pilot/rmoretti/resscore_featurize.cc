@@ -47,38 +47,19 @@
 
 static basic::Tracer TR("apps.resscore_featurize");
 
-
 static const std::vector< std::string > FEATURE_NAMES = {
 	"HYDRO",
-	"ELEM_C",
-	"ELEM_N",
-	"ELEM_O",
-	"ELEM_P",
-	"ELEM_S",
-	"ELEM_F",
-	"ELEM_Cl",
-	"ELEM_Br",
-	"ELEM_I",
-	"ELEM_X",
-	"GEOM_tetra",
-	"GEOM_trig",
-	"GEOM_lin",
-	"NUMH_H0",
-	"NUMH_H1",
-	"NUMH_H2",
-	"NUMH_H3",
-	"NUMH_H4+",
-	"NBOND_DX",
-	"NBOND_D1",
-	"NBOND_D2",
-	"NBOND_D3",
-	"NBOND_D4"
+	"ELEM",
+	"GEOM",
+	"NUMH",
+	"NBOND",
 };
 
 class ResidueFeaturizer {
 public:
 
 	class FeatureSet {
+
 	public:
 		FeatureSet() = default; // Needed for std::map default construction
 
@@ -86,24 +67,24 @@ public:
 			for ( core::Size atm(1); atm <= restype.natoms(); ++atm ) {
 				if ( restype.is_virtual(atm) ) { continue; }
 
-				utility::vector0<bool> af; // atom features
+				std::vector<int> af; // atom features
 
-				af.push_back( restype.atom_is_hydrogen(atm) );
-				af.append( get_element(restype, atm) );
-				af.append( get_geom(restype, atm) );
-				af.append( get_conn(restype, atm) );
-				af.append( get_bonded(restype, atm) );
+				af.push_back( int(restype.atom_is_hydrogen(atm)) );
+				af.push_back( get_element(restype, atm) );
+				af.push_back( get_geom(restype, atm) );
+				af.push_back( get_nhydro(restype, atm) );
+				af.push_back( get_bonded(restype, atm) );
 
 				features_[atm] = af;
 			}
 		}
 
-		std::map< core::Size, utility::vector0<bool> > const &
+		std::map< core::Size, utility::vector0<int> > const &
 		get_feature_vector() const {
 			return features_;
 		}
 
-		utility::vector0<bool>
+		int
 		get_element(core::chemical::ResidueType const & restype, core::Size atm) {
 			using namespace core::chemical::element;
 
@@ -112,23 +93,35 @@ public:
 				elem = restype.element( restype.atom_base(atm) );
 			}
 
-			utility::vector0<bool> ef;
-			ef.push_back( elem == C );
-			ef.push_back( elem == N );
-			ef.push_back( elem == O );
-			ef.push_back( elem == P );
-			ef.push_back( elem == S );
-			ef.push_back( elem == F );
-			ef.push_back( elem == Cl );
-			ef.push_back( elem == Br );
-			ef.push_back( elem == I );
-			ef.push_back( std::none_of( ef.begin(), ef.end(), [](bool b){ return b; } ) ); //
-
-			return ef;
+			switch (elem) {
+			case C:
+				return 1;
+			case N:
+				return 2;
+			case O:
+				return 3;
+			case S:
+				return 4;
+			case P:
+				return 5;
+			case F:
+				return 6;
+			case Cl:
+				return 7;
+			case Br:
+				return 8;
+			case I:
+				return 9;
+			default:
+				return 0;
+			}
 		}
 
-		utility::vector0<bool>
+		int
 		get_geom(core::chemical::ResidueType const & restype, core::Size atm_in) {
+			static constexpr int TET = 0;
+			static constexpr int TRI = 1;
+			static constexpr int LIN = 2;
 
 			core::Size atm = atm_in;
 			if ( restype.atom_is_hydrogen(atm_in) ) {
@@ -155,53 +148,53 @@ public:
 			}
 
 			if ( n_triple > 0 ) {
-				return {false, false, true}; // lin
+				return LIN;
 			}
 			if ( n_aro > 0 ) {
-				return {false, true, false}; // tri
+				return TRI;
 			}
 			if ( n_double == 0 ) {
 				// TODO: Deal with COO, CON, etc. (and the connections)
-				return {true, false, false}; // tet -- all single bonds
+				return TET; // all single bondes
 			}
 
 			auto elem = restype.element(atm); // base for hydrogens.
 			if ( elem == core::chemical::element::P || elem == core::chemical::element::S ) {
 				if ( n_double >= 2 ) {
-					return {true, false, false}; // Phoshpate, sulfate
+					return TET; // Phoshpate, sulfate
 				} else {
-					return {false, true, false}; // tri
+					return TRI;
 				}
 			} else {
 				if (n_double >= 2) {
-					return {false, false, true}; // lin: C=C=C
+					return LIN; // C=C=C
 				} else {
-					return {false, true, false}; // tri
+					return TRI;
 				}
 			}
-			return {true, false, false}; // tet -- should never get here
+			return TET; // should never get here
 		}
 
-		utility::vector0<bool>
-		get_conn(core::chemical::ResidueType const & restype, core::Size atm_in) {
+		int
+		get_nhydro(core::chemical::ResidueType const & restype, core::Size atm_in) {
+			static constexpr int MAX_HYDRO = 4;
+
 			core::Size atm = atm_in;
 			if ( restype.atom_is_hydrogen(atm_in) ) {
 				atm = restype.atom_base(atm_in);
 			}
 			core::Size nhydro = restype.number_bonded_hydrogens(atm);
 
-			utility::vector0<bool> cf = {false, false, false, false, false};
-
-			if ( nhydro >= cf.size() ) {
-				cf[ cf.size() - 1 ] = true;
+			if ( nhydro >= MAX_HYDRO ) {
+				return MAX_HYDRO;
 			} else {
-				cf[ nhydro ] = true;
+				return nhydro;
 			}
-			return cf;
 		}
 
-		utility::vector0<bool>
+		int
 		get_bonded(core::chemical::ResidueType const & restype, core::Size atm_in) {
+			static constexpr int MAX_BONDED = 4;
 			core::Size atm = atm_in;
 			if ( restype.atom_is_hydrogen(atm_in) ) {
 				atm = restype.atom_base(atm_in);
@@ -215,19 +208,16 @@ public:
 				}
 			}
 
-			utility::vector0<bool> bf = {false, false, false, false, false};
-
-			if ( nbonded >= bf.size() ) {
-				bf[ 0 ] = true;
+			if ( nbonded >= MAX_BONDED ) {
+				return 0;
 			} else {
-				bf[ nbonded ] = true;
+				return nbonded;
 			}
-
-			return bf;
 		}
 
 	private:
-		std::map< core::Size, utility::vector0<bool> > features_;
+		// Atom number to feature list
+		std::map< core::Size, utility::vector0<int> > features_;
 	};
 
 	ResidueFeaturizer() = default;
@@ -429,7 +419,7 @@ private:
 	std::map< core::id::AtomID, core::Size > id_to_atomno_;
 	std::map< std::pair< core::Size, core::Size >, core::Size > respair_to_idx_;
 
-	utility::vector0< utility::vector0< bool > > features_;
+	utility::vector0< utility::vector0< int > > features_;
 	utility::vector0< utility::vector0< core::Real > > bonds_; // respair, atm1, atm2, dist
 	utility::vector0< utility::vector0< core::Real > > angles_; // respair, atm1, atm2, atm3, angle
 	utility::vector0< utility::vector0< core::Real > > asym_torsions_; // respair, atm1, atm2, atm3, atm4, angle
