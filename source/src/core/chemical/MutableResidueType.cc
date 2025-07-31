@@ -1649,6 +1649,9 @@ MutableResidueType::add_ring(
 void
 MutableResidueType::set_lowest_energy_ring_conformer( core::uint const ring_num, std::string const & conformer )
 {
+	if ( ring_num == 0 || ring_num > lowest_ring_conformer_.size() ) {
+		utility_exit_with_message("Cannot designate low energy conformer for ring " + std::to_string(ring_num) + " on " + name() + " as there's only " + std::to_string(lowest_ring_conformer_.size()) + " rings");
+	}
 	lowest_ring_conformer_[ ring_num ] = conformer;
 }
 

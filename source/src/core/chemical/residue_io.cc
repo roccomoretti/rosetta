@@ -339,17 +339,17 @@ read_topology_file(
 /// "LOWER_CONNECT N" from SER.params.
 ///
 /// LOWEST_RING_CONFORMER:
-/// For a cyclic residue, declares which ideal ring conformation is most stable by IUPAC name.
+/// For a cyclic residue, declares which ideal ring conformation is most stable by IUPAC name for the given ring number
 /// There is no check in place for valid IUPAC conformer names; if the name is not found in the database, no lowest
 /// conformer will be set.
-/// E.g., "LOWEST_RING_CONFORMER  4C1" from to3-alpha-D-Glcp.params.
+/// E.g., "LOWEST_RING_CONFORMER 1 4C1" from to3-alpha-D-Glcp.params.
 ///
 /// LOW_RING_CONFORMERS:
-/// For a cyclic residue, declares which ideal ring conformations are local minima/stable by IUPAC name.
+/// For a cyclic residue, declares which ideal ring conformations are local minima/stable by IUPAC name for the given ring number
 /// (If present, the LOWEST_RING_CONFORMER will automatically included to this subset within RingConformerSet.)
 /// There is no check in place for valid IUPAC conformer names; if the name is not found in the database, that conform-
 /// er will not be added to the subset.
-/// E.g., "LOW_RING_CONFORMERS  O3B B14 3S1 5S1 2SO BO3 1S3 14B 1S5 B25 OS2 1C4" from to3-alpha-D-Glcp.params.
+/// E.g., "LOW_RING_CONFORMERS 1 O3B B14 3S1 5S1 2SO BO3 1S3 14B 1S5 B25 OS2 1C4" from to3-alpha-D-Glcp.params.
 ///
 /// MAINCHAIN_ATOMS:
 /// This is a list of atom names that define the main chain.  The main chain describes the linear connection of atoms
