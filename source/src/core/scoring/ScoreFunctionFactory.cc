@@ -546,7 +546,7 @@ get_score_function(
 	}
 
 	// Turn on carbohydrate energy method weights if the user has supplied the -include_sugars flag.
-	if ( options[ in::include_sugars ].value() && ! options[ score::force_sugar_bb_zero].value() ) {
+	if ( options[ in::include_sugars ].user() && options[ in::include_sugars ].value() && ! options[ score::force_sugar_bb_zero].value() ) {
 		if ( TR.Info.visible() && scorefxn->get_weight( sugar_bb ) == 0 ) {
 
 			TR.Info << "The -include_sugars flag was used with no sugar_bb weight set in the weights file.  " <<
@@ -556,7 +556,7 @@ get_score_function(
 	}
 	// JAB - turn on intra-rep to get less bad structures and energies.
 	//  Also, recommend beta - as the LKBridge term helps sugars significantly.
-	if ( options[ in::include_sugars].value() && scorefxn->get_weight( fa_intra_rep_xover4 ) == 0 ) {
+	if ( options[ in::include_sugars ].user() && options[ in::include_sugars].value() && scorefxn->get_weight( fa_intra_rep_xover4 ) == 0 ) {
 		TR.Info << " The -include_sugars flag was used without fa_intra_rep_xover4 term in the scorefunction."<<
 			" Setting this term's weight to 0.55. It is generally recommended to use the -beta scorefunction (Rosetta-ICO) with sugars,"<<
 			" which includes this and other desired terms such as those bridging waters" << std::endl;

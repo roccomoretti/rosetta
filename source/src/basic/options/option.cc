@@ -134,6 +134,18 @@ process()
 	{  // Carbohydrate-related umbrella options to make life easier for users
 		using namespace basic::options::OptionKeys;
 
+		// Set glycan defaults, but only if all the options aren't set manually
+		if ( !option[ in::include_sugars ].user()
+			&& !option[ in::alternate_3_letter_codes ].user()
+			&& !option[ out::file::write_glycan_pdb_codes ].user()
+			&& !option[ carbohydrates::glycam_pdb_format ] // By value, as it conflicts with below
+			&& !option[ mistakes::restore_pre_talaris_2013_behavior ] // By value, as -include_sugars has problems currently with pre-talaris definitions
+		) {
+			option[ in::include_sugars ].default_value( true );
+			option[ in::alternate_3_letter_codes ].default_value( utility::vector1<std::string>{"default","pdb_sugar"} );
+			option[ out::file::write_glycan_pdb_codes ].default_value( true );
+		}
+
 		//if ( option[ in::include_sugars ] ) {
 		//option[ score::no_pro_close_ring_closure ].value( true );
 		//option[ score::ring_close_shadow_constraint ].value( 0.1 );
