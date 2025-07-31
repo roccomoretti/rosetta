@@ -360,7 +360,7 @@ add_extra_data(
 	if ( options.use_pdb_format_HETNAM_records() ) {
 		resize_and_add_if_not_empty(sfrs, "rosetta::heterogen_names", sd.modelProperties, sd.msgpack_zone,
 			[](core::io::StructFileRepOP const & sfr) {return sfr->heterogen_names();});
-	} else if ( !options.write_glycan_pdb_codes() ) {
+	} else {
 		resize_and_add_if_not_empty(sfrs, "rosetta::residue_type_base_names", sd.modelProperties, sd.msgpack_zone,
 			[](core::io::StructFileRepOP const & sfr) {return sfr->residue_type_base_names();});
 	}

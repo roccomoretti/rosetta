@@ -259,13 +259,15 @@ public:
 				core::io::mmtf::add_extra_data(sd, sfrs, *options);
 
 				TS_ASSERT_EQUALS(sd.modelProperties.count("rosetta::residue_type_base_names"), 1);
-				std::vector< std::map< std::string, std::pair< std::string, std::string > > > returned;
-				::mmtf::MapDecoder const ep_MD(sd.modelProperties);
+				if ( sd.modelProperties.count("rosetta::residue_type_base_names") ) { // Because we crash if not
+					std::vector< std::map< std::string, std::pair< std::string, std::string > > > returned;
+					::mmtf::MapDecoder const ep_MD(sd.modelProperties);
 
-				ep_MD.decode("rosetta::residue_type_base_names", true, returned);
-				TS_ASSERT_EQUALS(returned.size(), 1);
-				for ( auto const & k_v : returned.at(0) ) {
-					TS_ASSERT_EQUALS(k_v.second, sfr->residue_type_base_names().at(k_v.first));
+					ep_MD.decode("rosetta::residue_type_base_names", true, returned);
+					TS_ASSERT_EQUALS(returned.size(), 1);
+					for ( auto const & k_v : returned.at(0) ) {
+						TS_ASSERT_EQUALS(k_v.second, sfr->residue_type_base_names().at(k_v.first));
+					}
 				}
 			}
 			{ // Stage 2: test in context of dump_mmtf
