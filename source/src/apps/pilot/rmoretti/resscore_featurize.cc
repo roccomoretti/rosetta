@@ -31,21 +31,32 @@
 #include <core/import_pose/pose_stream/util.hh>
 #include <core/import_pose/pose_stream/MetaPoseInputStream.hh>
 
+#include <core/select/residue_selector/ChainSelector.hh>
+#include <core/select/residue_selector/util.hh>
+
 #include <utility/vector0.hh>
 #include <utility/io/ozstream.hh>
+#include <utility/io/izstream.hh>
 #include <utility/file/FileName.hh>
 
 #include <basic/options/option.hh>
 #include <basic/options/keys/in.OptionKeys.gen.hh>
 #include <basic/options/keys/out.OptionKeys.gen.hh>
+#include <basic/options/option_macros.hh>
 #include <basic/Tracer.hh>
 
 #include <numeric/xyz.functions.hh>
 
+#include <json.hpp>
+
+#include <fstream>
 #include <string>
 #include <map>
 
 static basic::Tracer TR("apps.resscore_featurize");
+
+OPT_KEY( String, ligand_chain )
+OPT_KEY( File, config )
 
 static const std::vector< std::string > FEATURE_NAMES = {
 	"HYDRO",
@@ -57,6 +68,120 @@ static const std::vector< std::string > FEATURE_NAMES = {
 
 class ResidueFeaturizer {
 public:
+	static
+	core::Size
+	column_index(std::string const & colname) {
+		if ( colname == "HYDRO" ) {
+			return 0;
+		} else if ( colname == "ELEM" ) {
+			return 1;
+		} else if ( colname == "GEOM" ) {
+			return 2;
+		} else if ( colname == "NUMH" ) {
+			return 3;
+		} else if ( colname == "NBOND" ) {
+			return 4;
+		} else {
+			utility_exit_with_message("Cannot interpret `"+colname+"` as a column name");
+		}
+	}
+
+	static
+	std::string
+	column_from_index(core::Size index) {
+		switch( index ) {
+		case 0:
+			return "HYDRO";
+		case 1:
+			return "ELEM";
+		case 2:
+			return "GEOM";
+		case 3:
+			return "NUMH";
+		case 4:
+			return "NBOND";
+		default:
+			return std::to_string(index);
+		}
+	}
+
+	static
+	utility::vector1< int >
+	parse_value(std::string const & value_str, std::string const & colname) {
+		if ( value_str.empty() ) {
+			if (colname == "ELEM") {
+				return {1,2,3,4,5,6,7,8,9};
+			} else if ( colname == "GEOM" ) {
+				return {0,1,2};
+			} else if ( colname == "NUMH" ) {
+				return {0,1,2,3,4};
+			} else if ( colname == "NBOND" ) {
+				return {1,2,3,4,0};
+			} else {
+				utility_exit_with_message("Cannot column `"+colname+"`");
+			}
+		}
+		if ( colname == "ELEM" ) {
+			if ( value_str == "X" ) { return {0}; }
+			else if ( value_str == "C" ) { return {1}; }
+			else if ( value_str == "N" ) { return {2}; }
+			else if ( value_str == "O" ) { return {3}; }
+			else if ( value_str == "S" ) { return {4}; }
+			else if ( value_str == "P" ) { return {5}; }
+			else if ( value_str == "F" ) { return {6}; }
+			else if ( value_str == "Cl" ) { return {7}; }
+			else if ( value_str == "Br" ) { return {8}; }
+			else if ( value_str == "I" ) { return {9}; }
+		} else if ( colname == "GEOM" ) {
+			if ( value_str == "TET" ) { return {0}; }
+			else if ( value_str == "TRI" ) { return {1}; }
+			else if ( value_str == "LIN" ) { return {2}; }
+		}
+		// Direct numeric
+		try {
+			return {std::stoi(value_str)};
+		} catch ( std::invalid_argument const & e ) {
+			utility_exit_with_message("Cannot parse value `"+value_str+"` for column `"+colname+"`");
+		}
+	}
+
+	static
+	std::string
+	value_to_string(int value, core::Size col_index) {
+		switch( col_index ) {
+		//case 0:
+		//	return "HYDRO";
+		case 1:
+			switch( value ) {
+				case 0: return "X";
+				case 1: return "C";
+				case 2: return "N";
+				case 3: return "O";
+				case 4: return "S";
+				case 5: return "P";
+				case 6: return "F";
+				case 7: return "Cl";
+				case 8: return "Br";
+				case 9: return "I";
+			}
+			break;
+		case 2:
+			switch( value ) {
+				case 0: return "TET";
+				case 1: return "TRI";
+				case 2: return "LIN";
+			}
+			break;
+		//case 3:
+		//	return "NUMH";
+		//case 4:
+		//	return "NBOND";
+		default:
+			// fall off
+			break;
+		}
+		return std::to_string(value);
+	}
 
 	class FeatureSet {
 
@@ -236,132 +361,264 @@ private:
 
 };
 
-
-class PoseFeaturizer {
-	core::Real const DISTANCE_CUTOFF = 10.0;
+class FeatureSpec {
 
 public:
-	PoseFeaturizer(core::pose::Pose const & pose, ResidueFeaturizer & featurizer) {
-		for ( core::Size jj(1); jj <= pose.size(); ++jj ) {
-			core::conformation::Residue const & jj_res = pose.residue(jj);
+	struct Condition {
+		core::Size which = 0;
+		core::Size index = 0;
+		int value = -1;
+		bool inv = false;
 
-			collect_features( jj_res, featurizer );
+		std::string to_string() const {
+			return ResidueFeaturizer::column_from_index(index) + ":" + std::to_string(which) + (inv?"!=":"=") + ResidueFeaturizer::value_to_string(value,index);
+		}
+	};
 
-			// ii in inner loop such that the featurization above happens before.
-			for ( core::Size ii(1); ii < jj; ++ii ) {
-				core::conformation::Residue const & ii_res = pose.residue(ii);
 
-				// Quick out if residues are too far apart
-				if ( (ii_res.nbr_atom_xyz().distance( jj_res.nbr_atom_xyz() ) - ii_res.nbr_radius() - jj_res.nbr_radius()) > DISTANCE_CUTOFF ) {
-					break;
+	FeatureSpec( utility::vector1< Condition > const & conditions = utility::vector1< Condition >{} ):
+		conditions_(conditions)
+	{}
+
+// Format of feature specifications
+// features: [
+// 	{
+// 		restrict: ["COLUMN"] ## All values for all positions
+// 	}
+// 	{
+// 		restrict: ["COLUMN:POS"] ## All values for the given pos
+// 	}
+// 	{
+// 		restrict: ["COLUMN=VAL"] ## Specific value for all columns
+// 	}
+//	{ restrict: ["COLUMN:POS=VAL","COLUMN:POS!=VAL",...] }
+//	...
+// ]
+
+	static
+	utility::vector1< core::Size >
+	parse_pos( std::string const & pos_designation, std::string const & type = "DIST" ) {
+		if ( ! pos_designation.empty() ) {
+			return utility::vector1< core::Size >{ core::Size( std::stol( pos_designation ) ) };
+		} else if ( type == "DIST" ) {
+			return {1, 2};
+		} else {
+			utility_exit_with_message("Unable to parse position designation `" + pos_designation + "` of type " + type );
+		}
+	}
+
+	static
+	utility::vector1< FeatureSpec >
+	parse_json( json const & config ) {
+		utility::vector1< FeatureSpec > feature_specs;
+
+		for ( auto const & entry: config["features"] ) {
+			// Other non-restrict entries reserved for future use
+
+			utility::vector1< FeatureSpec > condition_sets;
+			condition_sets.push_back( FeatureSpec{} );
+
+			for ( auto const & cond: entry["restrict"] ) {
+				std::string column_str = "";
+				std::string pos_str = "";
+				std::string value_str = "";
+				bool inv = false;
+
+				utility::vector1<std::string> split_eq = utility::string_split(cond, '=');
+				if ( split_eq.size() == 0 ) { continue; }
+				if ( split_eq.size() > 2 ) { utility_exit_with_message("Too many '=' in `restrict`"); }
+				if ( split_eq.size() == 2) {
+					value_str = split_eq[2];
 				}
+				std::string colpos = split_eq[1];
+				if ( colpos[ colpos.size()-1 ] == '!' ) {
+					inv = true;
+					colpos = colpos.substr(0, colpos.size()-1);
+				}
+				utility::vector1<std::string> split_colon = utility::string_split(colpos, ':');
+				if ( split_colon.size() > 2 ) { utility_exit_with_message("Too many ':' in `restrict`"); }
+				if ( split_colon.size() == 2 ) {
+					pos_str = split_colon[2];
+				}
+				column_str = split_colon[1];
 
-				core::Real respair_idx = grab_energies(pose, ii, jj);
+				// Now convert the designations to Conditions
+				core::Size column = ResidueFeaturizer::column_index(column_str);
+				for (core::Size pos: parse_pos(pos_str) ) {
+					utility::vector1< Condition > conditions_for_position;
+					for ( int val: ResidueFeaturizer::parse_value(value_str, column_str) ) {
+						Condition new_cond;
+						new_cond.which = pos;
+						new_cond.index = column;
+						new_cond.value = val;
+						new_cond.inv = inv;
+
+						conditions_for_position.push_back( new_cond );
+					}
+					if ( condition_sets.empty() ) {
+						condition_sets.push_back( FeatureSpec{} );
+					}
+					utility::vector1< FeatureSpec > new_condition_sets;
+					for ( auto const & old_conds: condition_sets ) {
+						for ( auto const & new_cond: conditions_for_position ) {
+							FeatureSpec new_conds( old_conds );
+							new_conds.conditions_.push_back( new_cond );
+							new_condition_sets.emplace_back( std::move(new_conds) );
+						}
+					}
+					if ( new_condition_sets.size() >= condition_sets.size() ) {
+						condition_sets = std::move(new_condition_sets);
+					}
+				}
+			}
+			feature_specs.append( condition_sets );
+		}
+
+		return feature_specs;
+	}
+
+	utility::vector1< Condition >::const_iterator
+	begin() const { return conditions_.begin(); }
+
+	utility::vector1< Condition >::const_iterator
+	end() const { return conditions_.end(); }
+
+	std::vector< std::string >
+	to_string_vector() const {
+		std::vector< std::string > retval;
+		for ( auto const & cond: conditions_ ) {
+			retval.push_back( cond.to_string() );
+		}
+		return retval;
+	}
+
+	bool
+	matches(ResidueFeaturizer::FeatureSet const & fs, core::Size atm, core::Size which) const {
+		for ( Condition const & cond: conditions_ ) {
+			if ( cond.which != which ) { continue; }
+			auto const & feature_vector = fs.get_feature_vector();
+			if ( ! feature_vector.count(atm) ) { return false; } // Non-featurized atoms, like virtual atoms
+
+			if ( cond.inv ) {
+				if ( feature_vector.at(atm)[cond.index] == cond.value ) { return false; }
+			} else {
+				if ( feature_vector.at(atm)[cond.index] != cond.value ) { return false; }
+			}
+		}
+		return true;
+	}
+
+private:
+
+	utility::vector1< Condition > conditions_;
+
+};
+
+/// Contain
+class FeatureDescriber {
+public:
+
+	FeatureDescriber( json const & config ) {
+		features_ = FeatureSpec::parse_json( config );
+		parse_binning(config);
+	}
+
+	void parse_binning( json const & config ) {
+		if ( config.count("binnning") ) {
+			auto const & binning = config["binning"];
+			dist_min_ = binning.value("dist_min",dist_min_);
+			dist_max_ = binning.value("dist_max",dist_max_);
+			dist_width_ = binning.value("dist_width",dist_width_);
+		}
+	}
+
+	void dump_config( std::string const & filename ) const {
+		std::vector< std::vector< std::string > > output_struct;
+		for ( auto const & fs: features_ ) {
+			output_struct.push_back( fs.to_string_vector() );
+		}
+		json output( output_struct );
+		utility::io::ozstream f( filename );
+		f << std::setw(4) << output << std::endl;
+	}
+
+	core::Real dist_max() const { return dist_max_; }
+	core::Size nfeatures() const { return features_.size(); }
+	core::Size ndistbin() const {
+		return (dist_max_ - dist_min_)/dist_width_ + 0.99; // Round up
+	}
+
+	// Calculate return 0 to ndistbin()-1
+	core::Size distbin(core::Real dist) const {
+		return core::Size( (dist - dist_min_)/dist_width_ ); // Round down.
+	}
+
+	utility::vector1< bool >
+	matches(ResidueFeaturizer::FeatureSet const & fs, core::Size atm, core::Size which) const {
+		utility::vector1< bool > retval;
+		for ( FeatureSpec const & spec: features_ ) {
+			retval.push_back( spec.matches(fs, atm, which) );
+		}
+		return retval;
+	}
+
+private:
+	core::Real dist_min_ = 0, dist_max_ = 10, dist_width_ = 0.2;
+
+	utility::vector1< FeatureSpec > features_;
+
+};
+
+class PoseFeaturizer {
+
+public:
+	PoseFeaturizer(FeatureDescriber & fd, ResidueFeaturizer & rf):
+		feature_describer_(fd),
+		residue_featurizer_(rf)
+	{
+		features_.resize( feature_describer_.nfeatures() );
+		for ( core::Size ii(1); ii <= feature_describer_.nfeatures(); ++ii ) {
+			features_[ii].resize( feature_describer_.ndistbin() );
+		}
+	}
+
+	void
+	featurize( core::pose::Pose const & pose, utility::vector1< core::Size > const & focus, utility::vector1< core::Size > const & other ) {
+
+		core::Real dist_max = feature_describer_.dist_max();
+
+		for ( core::Size ii: focus ) {
+			core::conformation::Residue const & ii_res = pose.residue(ii);
+			ResidueFeaturizer::FeatureSet const & fs_ii = residue_featurizer_.featurize( ii_res.type() );
+
+			for( core::Size jj: other ) {
+				core::conformation::Residue const & jj_res = pose.residue(jj);
+				if ( ii_res.nbr_atom_xyz().distance( jj_res.nbr_atom_xyz() ) > (dist_max + ii_res.nbr_radius() + jj_res.nbr_radius()) ) {
+					continue;
+				}
+				ResidueFeaturizer::FeatureSet const & fs_jj = residue_featurizer_.featurize( jj_res.type() );
 
 				for ( core::Size ai(1); ai <= ii_res.natoms(); ++ai ) {
-					core::Real ai_idx = get_atom_index(ii, ai);
-					if ( ai_idx < 0 ) { continue; }
+					utility::vector1< bool > ii_atom_feat0 = feature_describer_.matches( fs_ii, ai, 0 );
+					utility::vector1< bool > ii_atom_feat1 = feature_describer_.matches( fs_ii, ai, 1 );
 
 					for ( core::Size aj(1); aj <= jj_res.natoms(); ++aj ) {
-						core::Real aj_idx = get_atom_index(jj, aj);
-						if ( aj_idx < 0 ) { continue; }
-
-						// DIST info
 						core::Real dist = ii_res.xyz(ai).distance( jj_res.xyz(aj) );
-						if ( dist > DISTANCE_CUTOFF ) { continue; } // Too far
+						if ( dist > dist_max ) { continue; } // Too far
 
-						// Bit better coherence -- always put hydrogens second
-						if ( ii_res.atom_is_hydrogen(ai) && ! jj_res.atom_is_hydrogen(aj) ) {
-							bonds_.push_back( {dist, respair_idx, aj_idx, ai_idx} );
-						} else {
-							// TODO: Should we permute the order here?
-							bonds_.push_back( {dist, respair_idx, ai_idx, aj_idx} );
+						utility::vector1< bool > jj_atom_feat0 = feature_describer_.matches( fs_jj, aj, 0 );
+						utility::vector1< bool > jj_atom_feat1 = feature_describer_.matches( fs_jj, aj, 1 );
+						core::Size distbin = feature_describer_.distbin(dist);
+
+						for ( core::Size ff(1); ff <= feature_describer_.nfeatures(); ++ff ) {
+							if ( ii_atom_feat0[ff] && jj_atom_feat1[ff] ) {
+								++features_[ff][distbin];
+							}
+							if ( jj_atom_feat0[ff] && ii_atom_feat1[ff] ) {
+								++features_[ff][distbin];
+							}
 						}
 
-						add_angles( respair_idx, ii_res, ai, jj_res, aj, dist, true );
-						add_angles( respair_idx, jj_res, aj, ii_res, ai, dist, false );
-					}
-				}
-			}
-		}
-	}
-
-	void
-	collect_features(core::conformation::Residue const & res, ResidueFeaturizer & featurizer ) {
-		ResidueFeaturizer::FeatureSet const & feat = featurizer.featurize( res.type() );
-		for ( auto const & pair: feat.get_feature_vector() ) {
-			id_to_atomno_[ core::id::AtomID(pair.first, res.seqpos()) ] = features_.size(); // pre-push gives zero-indexed
-			features_.push_back( pair.second );
-		}
-	}
-
-	core::Size
-	grab_energies(core::pose::Pose const & pose, core::Size ii, core::Size jj) {
-		core::scoring::Energies const & pose_energies( pose.energies() );
-		core::scoring::EnergyGraph const & egraph( pose_energies.energy_graph() );
-
-		core::Size idx = energies_.size();
-
-		respair_to_idx_[ std::make_pair(ii, jj) ] = idx;
-		respair_to_idx_[ std::make_pair(jj, ii) ] = idx;
-
-		auto edge = egraph.find_energy_edge(ii, jj);
-
-		core::Real score = 0;
-		if ( edge ) {
-			score = edge->fill_energy_map().dot( pose_energies.weights() );
-		}
-
-		energies_.push_back( score );
-		return idx;
-	}
-
-	core::Real
-	get_atom_index(core::Size resnum, core::Size atomnum) {
-		core::id::AtomID id(atomnum, resnum);
-		if ( id_to_atomno_.count(id) == 0 ) {
-			return -1; // Not featurized, for some reason
-		} else {
-			return core::Real( id_to_atomno_[id] );
-		}
-	}
-
-	void
-	add_angles( core::Real respair_idx, core::conformation::Residue const & res, core::Size aa, core::conformation::Residue const & res2, core::Size bb, core::Real dist, bool sym = false) {
-		for ( core::Size base: res.bonded_neighbor(aa) ) {
-			if ( res.atom_is_hydrogen(base) || res.is_virtual(base) ) { continue; }
-			core::Real base_idx = get_atom_index(res.seqpos(), base);
-			if ( base_idx < 0 ) { continue; }
-
-			core::Real angle = numeric::angle_degrees( res.xyz(base), res.xyz(aa), res2.xyz(bb) );
-
-			core::Real aa_idx = get_atom_index(res.seqpos(), aa); // Already validated
-			core::Real bb_idx = get_atom_index(res2.seqpos(), bb);
-			angles_.push_back( {angle, dist, respair_idx, base_idx, aa_idx, bb_idx} );
-
-			// Asymmetric torsions
-			for ( core::Size base2: res.bonded_neighbor(base) ) {
-				if ( base2 == aa ) { continue; }
-				if ( res.atom_is_hydrogen(base2) || res.is_virtual(base2) ) { continue; }
-				core::Real base2_idx = get_atom_index(res.seqpos(), base2);
-				if ( base2_idx < 0 ) { continue; }
-
-				core::Real torsion = numeric::dihedral_degrees( res.xyz(base2), res.xyz(base), res.xyz(aa), res2.xyz(bb) );
-				asym_torsions_.push_back( {torsion, dist, respair_idx, base2_idx, base_idx, aa_idx, bb_idx} );
-			}
-
-			if ( sym ) {
-				// Symmetric torsions -- one on each residue
-				for ( core::Size baseb: res2.bonded_neighbor(bb) ) {
-					if ( res2.atom_is_hydrogen(baseb) || res2.is_virtual(baseb) ) { continue; }
-					core::Real baseb_idx = get_atom_index(res2.seqpos(), baseb);
-					if ( baseb_idx < 0 ) { continue; }
-
-					core::Real torsion = numeric::dihedral_degrees( res.xyz(base), res.xyz(aa), res2.xyz(bb), res2.xyz(baseb) );
-					if ( res.atom_is_hydrogen(aa) && ! res2.atom_is_hydrogen(bb) ) {
-						sym_torsions_.push_back( {torsion, dist, respair_idx, baseb_idx, bb_idx, aa_idx, base_idx} );
-					} else {
-						sym_torsions_.push_back( {torsion, dist, respair_idx, base_idx, aa_idx, bb_idx, baseb_idx} );
 					}
 				}
 
@@ -369,81 +626,48 @@ public:
 		}
 	}
 
-	template< class T >
-	void
-	dump_table( utility::io::ozstream & out, utility::vector0< utility::vector0< T > > const & vector ) {
-		for ( auto const & inner: vector ) {
-			for ( auto const & value: inner ) {
-				out << value << "\t";
-			}
-			out << "\n";
-		}
-	}
-
-	template< class T >
-	void
-	dump_vector( utility::io::ozstream & out, utility::vector0< T > const & vector ) {
-		for ( auto const & value: vector ) {
-			out << value << "\n";
-		}
-	}
+public:
 
 	void
 	dump( std::string const & filename ) {
 		utility::io::ozstream out(filename);
-
-		out << "##FEATURES";
-		for (std::string const & name: FEATURE_NAMES ) {
-			out << "\t" << name;
-		}
-		out << "\n";
-		dump_table( out, features_ );
-
-		out << "##RESPAIR_ENERGIES\n";
-		dump_vector( out, energies_ );
-
-		out << "##BONDS\n";
-		dump_table( out, bonds_ );
-
-		out << "##ANGLES\n";
-		dump_table( out, angles_ );
-
-		out << "##ASYMTORSIONS\n";
-		dump_table( out, asym_torsions_ );
-
-		out << "##SYMTORSIONS\n";
-		dump_table( out, sym_torsions_ );
+		json outvalues{ features_ };
+		out << outvalues.dump( 2 );
 	}
 
 private:
-	std::map< core::id::AtomID, core::Size > id_to_atomno_;
-	std::map< std::pair< core::Size, core::Size >, core::Size > respair_to_idx_;
+	FeatureDescriber & feature_describer_;
+	ResidueFeaturizer & residue_featurizer_;
 
-	utility::vector0< utility::vector0< int > > features_;
-	utility::vector0< utility::vector0< core::Real > > bonds_; // respair, atm1, atm2, dist
-	utility::vector0< utility::vector0< core::Real > > angles_; // respair, atm1, atm2, atm3, angle
-	utility::vector0< utility::vector0< core::Real > > asym_torsions_; // respair, atm1, atm2, atm3, atm4, angle
-	utility::vector0< utility::vector0< core::Real > > sym_torsions_; // respair, atm1, atm2, atm3, atm4, angle
+	// Indexed by feature number, then by distance binning, storing counts of interactions.
+	utility::vector1< utility::vector0< int > > features_;
 
-	utility::vector0< core::Real > energies_;
 };
+
+json
+load_config(std::string const & filename) {
+	std::ifstream stream(filename);
+	return json::parse(stream);
+}
 
 int
 main( int argc, char* argv [] ) {
 	using namespace basic::options;
 	using namespace basic::options::OptionKeys;
 
+	NEW_OPT( ligand_chain, "Which chain letter to use for analysis", "X" );
+	NEW_OPT( config, "What (JSON-formatted) configuration file to use", "config.json" );
+
 	try {
 
 		devel::init( argc, argv );
 
-		core::scoring::ScoreFunctionOP scorefxn = core::scoring::get_score_function();
-		core::scoring::methods::EnergyMethodOptionsOP emopts( new core::scoring::methods::EnergyMethodOptions( scorefxn->energy_method_options() ) );
-		emopts->hbond_options().decompose_bb_hb_into_pair_energies( true );
-		scorefxn->set_energy_method_options( *emopts );
-		// Post-loading commandline scorefunction alterations.
-		core::scoring::constraints::add_constraints_from_cmdline_to_scorefxn( *scorefxn );
-		// TODO: Do we need other scorefunction modifications here?
+		json config = load_config( basic::options::option[ basic::options::OptionKeys::config ] );
+
+		FeatureDescriber feature_describer( config );
+		feature_describer.dump_config( "config_out.json" );
+
+		core::select::residue_selector::ChainSelector ligand_selector( basic::options::option[ basic::options::OptionKeys::ligand_chain ] );
 
 		using namespace core::import_pose::pose_stream;
 		MetaPoseInputStream input = streams_from_cmd_line();
@@ -461,15 +685,16 @@ main( int argc, char* argv [] ) {
 
 			input.fill_pose( pose, *rsd_set );
 
-			// Load commandline pose modifications
-			core::scoring::constraints::add_constraints_from_cmdline_to_pose( pose );
-			// TODO: Others that should go here? Disulfides, rotamer bonuses, etc.?
+			TR << "Processing " << core::pose::tag_from_pose(pose) << std::endl;
 
-			(*scorefxn)(pose);
+			PoseFeaturizer pose_featurizer(feature_describer, featurizer); // New one for each input
 
-			PoseFeaturizer pose_featurizer(pose, featurizer);
+			utility::vector1< core::Size > ligand_residues = core::select::residue_selector::selection_positions( ligand_selector.apply(pose) );
+			utility::vector1< core::Size > other_residues = core::select::residue_selector::unselection_positions( ligand_selector.apply(pose) );
 
-			std::string filename = std::string(basic::options::option[ out::path::all ].value()) + utility::file::FileName( core::pose::tag_from_pose(pose) ).base() + ".dat.gz";
+			pose_featurizer.featurize( pose, ligand_residues, other_residues );
+
+			std::string filename = std::string(basic::options::option[ out::path::all ].value()) + utility::file::FileName( core::pose::tag_from_pose(pose) ).base() + ".json.gz";
 			TR << "Saving data to `" << filename << "`" << std::endl;
 
 			pose_featurizer.dump(filename);
