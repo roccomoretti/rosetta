@@ -533,11 +533,18 @@ public:
 	}
 
 	void dump_config( std::string const & filename ) const {
-		std::vector< std::vector< std::string > > output_struct;
+		json output;
+		output["binning"] = json::object();
+		output["binning"]["dist_min"] = dist_min_;
+		output["binning"]["dist_max"] = dist_max_;
+		output["binning"]["dist_width"] = dist_width_;
+
+		json features_out = json::array();
 		for ( auto const & fs: features_ ) {
-			output_struct.push_back( fs.to_string_vector() );
+			features_out.push_back( fs.to_string_vector() );
 		}
-		json output( output_struct );
+		output["features"] = features_out;
+
 		utility::io::ozstream f( filename );
 		f << std::setw(4) << output << std::endl;
 	}
