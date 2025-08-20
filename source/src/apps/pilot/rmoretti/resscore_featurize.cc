@@ -99,6 +99,7 @@ FeatureType_to_string(FeatureType ft) {
 	case FeatureType::NBOND:
 		return "NBOND";
 	}
+	utility_exit_with_message("Can't understand feature specification");
 }
 
 utility::vector1< int >
@@ -182,6 +183,174 @@ parse_pos( std::string const & pos_designation, std::string const & type = "DIST
 	}
 }
 
+class AtomFeaturizer {
+
+public:
+	AtomFeaturizer() = default;
+
+	static
+	bool
+	skip( core::chemical::ResidueType const & restype, core::Size atm ) {
+		// For now, just skip virtual atoms
+		return restype.is_virtual(atm);
+	}
+
+	static
+	int
+	get_value( core::chemical::ResidueType const & restype, core::Size atm, FeatureType ft ) {
+		switch ( ft ) {
+		case FeatureType::HYDRO:
+			return int(restype.atom_is_hydrogen(atm));
+		case FeatureType::ELEM:
+			return get_element(restype, atm);
+		case FeatureType::GEOM:
+			return get_geom(restype,atm);
+		case FeatureType::NUMH:
+			return get_nhydro(restype,atm);
+		case FeatureType::NBOND:
+			return get_bonded(restype,atm);
+		}
+		utility_exit_with_message("Can't understand feature type");
+	}
+
+	static
+	int
+	get_element(core::chemical::ResidueType const & restype, core::Size atm) {
+		using namespace core::chemical::element;
+
+		auto elem = restype.element(atm);
+		if ( restype.atom_is_hydrogen(atm) ) { // The element for a hydrogen is the attached element type
+			elem = restype.element( restype.atom_base(atm) );
+		}
+
+		switch (elem) {
+		case C:
+			return 1;
+		case N:
+			return 2;
+		case O:
+			return 3;
+		case S:
+			return 4;
+		case P:
+			return 5;
+		case F:
+			return 6;
+		case Cl:
+			return 7;
+		case Br:
+			return 8;
+		case I:
+			return 9;
+		default:
+			return 0;
+		}
+	}
+
+	static
+	int
+	get_geom(core::chemical::ResidueType const & restype, core::Size atm_in) {
+		static constexpr int TET = 0;
+		static constexpr int TRI = 1;
+		static constexpr int LIN = 2;
+
+		core::Size atm = atm_in;
+		if ( restype.atom_is_hydrogen(atm_in) ) {
+			atm = restype.atom_base(atm_in);
+		}
+
+		auto types = restype.bonded_neighbor_types(atm);
+
+		core::Size n_double = 0, n_aro = 0, n_triple = 0;
+		for ( auto type: restype.bonded_neighbor_types(atm) ) {
+			switch ( type ) {
+			case core::chemical::BondName::TripleBond:
+				++n_triple;
+				break;
+			case core::chemical::BondName::DoubleBond:
+				++n_double;
+				break;
+			case core::chemical::BondName::AromaticBond:
+				++n_aro;
+				break;
+			default:
+				break;
+			}
+		}
+
+		if ( n_triple > 0 ) {
+			return LIN;
+		}
+		if ( n_aro > 0 ) {
+			return TRI;
+		}
+		if ( n_double == 0 ) {
+			// TODO: Deal with COO, CON, etc. (and the connections)
+			return TET; // all single bondes
+		}
+
+		auto elem = restype.element(atm); // base for hydrogens.
+		if ( elem == core::chemical::element::P || elem == core::chemical::element::S ) {
+			if ( n_double >= 2 ) {
+				return TET; // Phoshpate, sulfate
+			} else {
+				return TRI;
+			}
+		} else {
+			if (n_double >= 2) {
+				return LIN; // C=C=C
+			} else {
+				return TRI;
+			}
+		}
+		return TET; // should never get here
+	}
+
+	static
+	int
+	get_nhydro(core::chemical::ResidueType const & restype, core::Size atm_in) {
+		static constexpr int MAX_HYDRO = 4;
+
+		core::Size atm = atm_in;
+		if ( restype.atom_is_hydrogen(atm_in) ) {
+			atm = restype.atom_base(atm_in);
+		}
+		core::Size nhydro = restype.number_bonded_hydrogens(atm);
+
+		if ( nhydro >= MAX_HYDRO ) {
+			return MAX_HYDRO;
+		} else {
+			return nhydro;
+		}
+	}
+
+	static
+	int
+	get_bonded(core::chemical::ResidueType const & restype, core::Size atm_in) {
+		static constexpr int MAX_BONDED = 4;
+		core::Size atm = atm_in;
+		if ( restype.atom_is_hydrogen(atm_in) ) {
+			atm = restype.atom_base(atm_in);
+		}
+		auto bonded_to = restype.bonded_neighbor(atm);
+
+		core::Size nbonded = 0;
+		for ( auto b: bonded_to ) {
+			if ( ! restype.is_virtual(b) ) {
+				++nbonded;
+			}
+		}
+
+		if ( nbonded >= MAX_BONDED ) {
+			return 0;
+		} else {
+			return nbonded;
+		}
+	}
+
+private:
+};
+
 struct Condition {
 	core::Size pos = 0;
 	FeatureType feature_type = FeatureType::HYDRO;
@@ -193,196 +362,21 @@ struct Condition {
 	}
 };
 
-
-
-class ResidueFeaturizer {
-public:
-
-	class FeatureSet {
-
-	public:
-		FeatureSet() = default; // Needed for std::map default construction
-
-		FeatureSet(core::chemical::ResidueType const & restype) {
-			for ( core::Size atm(1); atm <= restype.natoms(); ++atm ) {
-				if ( restype.is_virtual(atm) ) { continue; }
-
-				std::vector<int> af; // atom features
-
-				af.push_back( int(restype.atom_is_hydrogen(atm)) );
-				af.push_back( get_element(restype, atm) );
-				af.push_back( get_geom(restype, atm) );
-				af.push_back( get_nhydro(restype, atm) );
-				af.push_back( get_bonded(restype, atm) );
-
-				features_[atm] = af;
-			}
-		}
-
-		std::map< core::Size, utility::vector0<int> > const &
-		get_feature_vector() const {
-			return features_;
-		}
-
-		int
-		get_element(core::chemical::ResidueType const & restype, core::Size atm) {
-			using namespace core::chemical::element;
-
-			auto elem = restype.element(atm);
-			if ( restype.atom_is_hydrogen(atm) ) { // The element for a hydrogen is the attached element type
-				elem = restype.element( restype.atom_base(atm) );
-			}
-
-			switch (elem) {
-			case C:
-				return 1;
-			case N:
-				return 2;
-			case O:
-				return 3;
-			case S:
-				return 4;
-			case P:
-				return 5;
-			case F:
-				return 6;
-			case Cl:
-				return 7;
-			case Br:
-				return 8;
-			case I:
-				return 9;
-			default:
-				return 0;
-			}
-		}
-
-		int
-		get_geom(core::chemical::ResidueType const & restype, core::Size atm_in) {
-			static constexpr int TET = 0;
-			static constexpr int TRI = 1;
-			static constexpr int LIN = 2;
-
-			core::Size atm = atm_in;
-			if ( restype.atom_is_hydrogen(atm_in) ) {
-				atm = restype.atom_base(atm_in);
-			}
-
-			auto types = restype.bonded_neighbor_types(atm);
-
-			core::Size n_double = 0, n_aro = 0, n_triple = 0;
-			for ( auto type: restype.bonded_neighbor_types(atm) ) {
-				switch ( type ) {
-				case core::chemical::BondName::TripleBond:
-					++n_triple;
-					break;
-				case core::chemical::BondName::DoubleBond:
-					++n_double;
-					break;
-				case core::chemical::BondName::AromaticBond:
-					++n_aro;
-					break;
-				default:
-					break;
-				}
-			}
-
-			if ( n_triple > 0 ) {
-				return LIN;
-			}
-			if ( n_aro > 0 ) {
-				return TRI;
-			}
-			if ( n_double == 0 ) {
-				// TODO: Deal with COO, CON, etc. (and the connections)
-				return TET; // all single bondes
-			}
-
-			auto elem = restype.element(atm); // base for hydrogens.
-			if ( elem == core::chemical::element::P || elem == core::chemical::element::S ) {
-				if ( n_double >= 2 ) {
-					return TET; // Phoshpate, sulfate
-				} else {
-					return TRI;
-				}
-			} else {
-				if (n_double >= 2) {
-					return LIN; // C=C=C
-				} else {
-					return TRI;
-				}
-			}
-			return TET; // should never get here
-		}
-
-		int
-		get_nhydro(core::chemical::ResidueType const & restype, core::Size atm_in) {
-			static constexpr int MAX_HYDRO = 4;
-
-			core::Size atm = atm_in;
-			if ( restype.atom_is_hydrogen(atm_in) ) {
-				atm = restype.atom_base(atm_in);
-			}
-			core::Size nhydro = restype.number_bonded_hydrogens(atm);
-
-			if ( nhydro >= MAX_HYDRO ) {
-				return MAX_HYDRO;
-			} else {
-				return nhydro;
-			}
-		}
-
-		int
-		get_bonded(core::chemical::ResidueType const & restype, core::Size atm_in) {
-			static constexpr int MAX_BONDED = 4;
-			core::Size atm = atm_in;
-			if ( restype.atom_is_hydrogen(atm_in) ) {
-				atm = restype.atom_base(atm_in);
-			}
-			auto bonded_to = restype.bonded_neighbor(atm);
-
-			core::Size nbonded = 0;
-			for ( auto b: bonded_to ) {
-				if ( ! restype.is_virtual(b) ) {
-					++nbonded;
-				}
-			}
-
-			if ( nbonded >= MAX_BONDED ) {
-				return 0;
-			} else {
-				return nbonded;
-			}
-		}
-
-	private:
-		// Atom number to feature list
-		std::map< core::Size, utility::vector0<int> > features_;
-	};
-
-	ResidueFeaturizer() = default;
-
-	FeatureSet const & featurize(core::chemical::ResidueType const & restype) {
-		std::string rtn = restype.name();
-		if ( features_.count(rtn) == 0 ) {
-			features_[rtn] = FeatureSet(restype);
-		}
-		return features_[rtn];
-	}
-
-private:
-
-	std::map< std::string, FeatureSet > features_;
-
-};
-
 class FeatureSpec {
 
 public:
 
-	FeatureSpec( utility::vector1< Condition > const & conditions = utility::vector1< Condition >{} ):
-		conditions_(conditions)
-	{}
+	FeatureSpec( utility::vector1< Condition > const & conditions = utility::vector1< Condition >{} )
+	{
+		for ( auto const & cond: conditions ) {
+			conditions_by_pos_[cond.pos].push_back( cond );
+		}
+	}
+
+	void
+	add_condition( Condition const & cond ) {
+		conditions_by_pos_[cond.pos].push_back( cond );
+	}
 
 // Format of feature specifications
 // features: [
@@ -454,7 +448,7 @@ public:
 					for ( auto const & old_conds: condition_sets ) {
 						for ( auto const & new_cond: conditions_for_position ) {
 							FeatureSpec new_conds( old_conds );
-							new_conds.conditions_.push_back( new_cond );
+							new_conds.add_condition( new_cond );
 							new_condition_sets.emplace_back( std::move(new_conds) );
 						}
 					}
@@ -469,32 +463,27 @@ public:
 		return feature_specs;
 	}
 
-	utility::vector1< Condition >::const_iterator
-	begin() const { return conditions_.begin(); }
-
-	utility::vector1< Condition >::const_iterator
-	end() const { return conditions_.end(); }
-
 	std::vector< std::string >
 	to_string_vector() const {
 		std::vector< std::string > retval;
-		for ( auto const & cond: conditions_ ) {
-			retval.push_back( cond.to_string() );
+		for ( auto const & entry: conditions_by_pos_ ) {
+			for ( auto const & cond: entry.second ) {
+				retval.push_back( cond.to_string() );
+			}
 		}
 		return retval;
 	}
 
 	bool
-	matches(ResidueFeaturizer::FeatureSet const & fs, core::Size atm, core::Size which) const {
-		for ( Condition const & cond: conditions_ ) {
-			if ( cond.pos != which ) { continue; }
-			auto const & feature_vector = fs.get_feature_vector();
-			if ( ! feature_vector.count(atm) ) { return false; } // Non-featurized atoms, like virtual atoms
-
+	matches( core::chemical::ResidueType const & restype, core::Size atm, int pos ) const {
+		if ( AtomFeaturizer::skip(restype, atm) ) { return false; }
+		if ( conditions_by_pos_.count(pos) == 0 ) { return true; } // No conditions mean pass
+		for ( Condition const & cond: conditions_by_pos_.at(pos) ) {
+			int atom_val = AtomFeaturizer::get_value(restype, atm, cond.feature_type);
 			if ( cond.inv ) {
-				if ( feature_vector.at(atm)[int(cond.feature_type)] == cond.value ) { return false; }
+				if ( atom_val == cond.value ) { return false; }
 			} else {
-				if ( feature_vector.at(atm)[int(cond.feature_type)] != cond.value ) { return false; }
+				if ( atom_val != cond.value ) { return false; }
 			}
 		}
 		return true;
@@ -502,12 +491,10 @@ public:
 
 private:
 
-	utility::vector1< Condition > conditions_;
+	std::map< core::Size, utility::vector1< Condition > > conditions_by_pos_;
 
 };
 
-
-/// Contain
 class FeatureDescriber {
 public:
 
@@ -553,13 +540,9 @@ public:
 		return core::Size( (dist - dist_min_)/dist_width_ ); // Round down.
 	}
 
-	utility::vector1< bool >
-	matches(ResidueFeaturizer::FeatureSet const & fs, core::Size atm, core::Size which) const {
-		utility::vector1< bool > retval;
-		for ( FeatureSpec const & spec: features_ ) {
-			retval.push_back( spec.matches(fs, atm, which) );
-		}
-		return retval;
+	utility::vector1< FeatureSpec > const &
+	get_features() const {
+		return features_;
 	}
 
 private:
@@ -568,6 +551,43 @@ private:
 	utility::vector1< FeatureSpec > features_;
 
 };
+
+
+class ResidueFeaturizer {
+public:
+
+	ResidueFeaturizer(FeatureDescriber & feature_describer):
+		feature_describer_(feature_describer)
+	{}
+
+	utility::vector1< bool > const &
+	get_feature_vector( core::chemical::ResidueType const & restype, core::Size atm, int pos ) {
+		std::string const & name = restype.name();
+		if ( pos_features_.count( name ) == 0 || pos_features_[name].count(atm) == 0 || pos_features_[name][atm].count(pos) == 0 ) {
+			utility::vector1< bool > & feat_vect = pos_features_[name][atm][pos];
+
+			for ( FeatureSpec const & spec: feature_describer_.get_features() ) {
+				feat_vect.push_back( spec.matches(restype, atm, pos) );
+			}
+		}
+		return pos_features_[name][atm][pos];
+	}
+
+private:
+
+	FeatureDescriber & feature_describer_;
+
+	// Indexed by restype name, atomnum & position
+	std::map< std::string,
+		std::map< core::Size,
+			std::map< int,
+				utility::vector1< bool >
+			>
+		>
+	> pos_features_;
+
+};
+
 
 class PoseFeaturizer {
 
@@ -589,25 +609,25 @@ public:
 
 		for ( core::Size ii: focus ) {
 			core::conformation::Residue const & ii_res = pose.residue(ii);
-			ResidueFeaturizer::FeatureSet const & fs_ii = residue_featurizer_.featurize( ii_res.type() );
+			core::chemical::ResidueType const & ii_type = ii_res.type();
 
 			for( core::Size jj: other ) {
 				core::conformation::Residue const & jj_res = pose.residue(jj);
+				core::chemical::ResidueType const & jj_type = jj_res.type();
 				if ( ii_res.nbr_atom_xyz().distance( jj_res.nbr_atom_xyz() ) > (dist_max + ii_res.nbr_radius() + jj_res.nbr_radius()) ) {
 					continue;
 				}
-				ResidueFeaturizer::FeatureSet const & fs_jj = residue_featurizer_.featurize( jj_res.type() );
 
 				for ( core::Size ai(1); ai <= ii_res.natoms(); ++ai ) {
-					utility::vector1< bool > ii_atom_feat0 = feature_describer_.matches( fs_ii, ai, 0 );
-					utility::vector1< bool > ii_atom_feat1 = feature_describer_.matches( fs_ii, ai, 1 );
+					utility::vector1< bool > const & ii_atom_feat0 = residue_featurizer_.get_feature_vector(ii_type,ai,0);//feature_describer_.matches( fs_ii, ai, 0 );
+					utility::vector1< bool > const & ii_atom_feat1 = residue_featurizer_.get_feature_vector(ii_type,ai,1);//feature_describer_.matches( fs_ii, ai, 1 );
 
 					for ( core::Size aj(1); aj <= jj_res.natoms(); ++aj ) {
 						core::Real dist = ii_res.xyz(ai).distance( jj_res.xyz(aj) );
 						if ( dist > dist_max ) { continue; } // Too far
 
-						utility::vector1< bool > jj_atom_feat0 = feature_describer_.matches( fs_jj, aj, 0 );
-						utility::vector1< bool > jj_atom_feat1 = feature_describer_.matches( fs_jj, aj, 1 );
+						utility::vector1< bool > const & jj_atom_feat0 = residue_featurizer_.get_feature_vector(jj_type,aj,0);//feature_describer_.matches( fs_jj, aj, 0 );
+						utility::vector1< bool > const & jj_atom_feat1 = residue_featurizer_.get_feature_vector(jj_type,aj,1);//feature_describer_.matches( fs_jj, aj, 1 );
 						core::Size distbin = feature_describer_.distbin(dist);
 
 						for ( core::Size ff(1); ff <= feature_describer_.nfeatures(); ++ff ) {
@@ -682,7 +702,7 @@ main( int argc, char* argv [] ) {
 			basic::options::option[ in::file::residue_type_set ]()
 		);
 
-		ResidueFeaturizer featurizer;
+		ResidueFeaturizer featurizer(feature_describer);
 
 		core::pose::Pose pose;
 
