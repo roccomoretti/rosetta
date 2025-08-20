@@ -60,130 +60,143 @@ OPT_KEY( String, ligand_chain )
 OPT_KEY( String, ligand_name3 )
 OPT_KEY( File, config )
 
-static const std::vector< std::string > FEATURE_NAMES = {
-	"HYDRO",
-	"ELEM",
-	"GEOM",
-	"NUMH",
-	"NBOND",
+enum class FeatureType {
+	HYDRO,
+	ELEM,
+	GEOM,
+	NUMH,
+	NBOND
 };
+
+FeatureType
+FeatureType_from_string(std::string const & type_str) {
+	if ( type_str == "HYDRO" ) {
+		return FeatureType::HYDRO;
+	} else if ( type_str == "ELEM" ) {
+		return FeatureType::ELEM;
+	} else if ( type_str == "GEOM" ) {
+		return FeatureType::GEOM;
+	} else if ( type_str == "NUMH" ) {
+		return FeatureType::NUMH;
+	} else if ( type_str == "NBOND" ) {
+		return FeatureType::NBOND;
+	} else {
+		utility_exit_with_message("Cannot interpret `"+type_str+"` as a feature type name");
+	}
+}
+
+std::string
+FeatureType_to_string(FeatureType ft) {
+	switch( ft ) {
+	case FeatureType::HYDRO:
+		return "HYDRO";
+	case FeatureType::ELEM:
+		return "ELEM";
+	case FeatureType::GEOM:
+		return "GEOM";
+	case FeatureType::NUMH:
+		return "NUMH";
+	case FeatureType::NBOND:
+		return "NBOND";
+	}
+}
+
+utility::vector1< int >
+parse_feature_value(std::string const & value_str, std::string const & colname) {
+	if ( value_str.empty() ) {
+		if (colname == "ELEM") {
+			return {1,2,3,4,5,6,7,8,9};
+		} else if ( colname == "GEOM" ) {
+			return {0,1,2};
+		} else if ( colname == "NUMH" ) {
+			return {0,1,2,3,4};
+		} else if ( colname == "NBOND" ) {
+			return {1,2,3,4,0};
+		} else {
+			utility_exit_with_message("Cannot column `"+colname+"`");
+		}
+	}
+	if ( colname == "ELEM" ) {
+		if ( value_str == "X" ) { return {0}; }
+		else if ( value_str == "C" ) { return {1}; }
+		else if ( value_str == "N" ) { return {2}; }
+		else if ( value_str == "O" ) { return {3}; }
+		else if ( value_str == "S" ) { return {4}; }
+		else if ( value_str == "P" ) { return {5}; }
+		else if ( value_str == "F" ) { return {6}; }
+		else if ( value_str == "Cl" ) { return {7}; }
+		else if ( value_str == "Br" ) { return {8}; }
+		else if ( value_str == "I" ) { return {9}; }
+	} else if ( colname == "GEOM" ) {
+		if ( value_str == "TET" ) { return {0}; }
+		else if ( value_str == "TRI" ) { return {1}; }
+		else if ( value_str == "LIN" ) { return {2}; }
+	}
+	// Direct numeric
+	try {
+		return {std::stoi(value_str)};
+	} catch ( std::invalid_argument const & e ) {
+		utility_exit_with_message("Cannot parse value `"+value_str+"` for column `"+colname+"`");
+	}
+}
+
+std::string
+feature_value_to_string(int value, FeatureType ft) {
+	switch( ft ) {
+	case FeatureType::ELEM:
+		switch( value ) {
+			case 0: return "X";
+			case 1: return "C";
+			case 2: return "N";
+			case 3: return "O";
+			case 4: return "S";
+			case 5: return "P";
+			case 6: return "F";
+			case 7: return "Cl";
+			case 8: return "Br";
+			case 9: return "I";
+		}
+		break;
+	case FeatureType::GEOM:
+		switch( value ) {
+			case 0: return "TET";
+			case 1: return "TRI";
+			case 2: return "LIN";
+		}
+		break;
+	default:
+		// The rest are numeric
+		break;
+	}
+	return std::to_string(value);
+}
+
+utility::vector1< core::Size >
+parse_pos( std::string const & pos_designation, std::string const & type = "DIST" ) {
+	if ( ! pos_designation.empty() ) {
+		return utility::vector1< core::Size >{ core::Size( std::stol( pos_designation ) ) };
+	} else if ( type == "DIST" ) {
+		return {1, 2};
+	} else {
+		utility_exit_with_message("Unable to parse position designation `" + pos_designation + "` of type " + type );
+	}
+}
+
+struct Condition {
+	core::Size pos = 0;
+	FeatureType feature_type = FeatureType::HYDRO;
+	int value = -1;
+	bool inv = false;
+
+	std::string to_string() const {
+		return FeatureType_to_string(feature_type) + ":" + std::to_string(pos) + (inv?"!=":"=") + feature_value_to_string(value,feature_type);
+	}
+};
+
+
 
 class ResidueFeaturizer {
 public:
-	static
-	core::Size
-	column_index(std::string const & colname) {
-		if ( colname == "HYDRO" ) {
-			return 0;
-		} else if ( colname == "ELEM" ) {
-			return 1;
-		} else if ( colname == "GEOM" ) {
-			return 2;
-		} else if ( colname == "NUMH" ) {
-			return 3;
-		} else if ( colname == "NBOND" ) {
-			return 4;
-		} else {
-			utility_exit_with_message("Cannot interpret `"+colname+"` as a column name");
-		}
-	}
-
-	static
-	std::string
-	column_from_index(core::Size index) {
-		switch( index ) {
-		case 0:
-			return "HYDRO";
-		case 1:
-			return "ELEM";
-		case 2:
-			return "GEOM";
-		case 3:
-			return "NUMH";
-		case 4:
-			return "NBOND";
-		default:
-			return std::to_string(index);
-		}
-	}
-
-	static
-	utility::vector1< int >
-	parse_value(std::string const & value_str, std::string const & colname) {
-		if ( value_str.empty() ) {
-			if (colname == "ELEM") {
-				return {1,2,3,4,5,6,7,8,9};
-			} else if ( colname == "GEOM" ) {
-				return {0,1,2};
-			} else if ( colname == "NUMH" ) {
-				return {0,1,2,3,4};
-			} else if ( colname == "NBOND" ) {
-				return {1,2,3,4,0};
-			} else {
-				utility_exit_with_message("Cannot column `"+colname+"`");
-			}
-		}
-		if ( colname == "ELEM" ) {
-			if ( value_str == "X" ) { return {0}; }
-			else if ( value_str == "C" ) { return {1}; }
-			else if ( value_str == "N" ) { return {2}; }
-			else if ( value_str == "O" ) { return {3}; }
-			else if ( value_str == "S" ) { return {4}; }
-			else if ( value_str == "P" ) { return {5}; }
-			else if ( value_str == "F" ) { return {6}; }
-			else if ( value_str == "Cl" ) { return {7}; }
-			else if ( value_str == "Br" ) { return {8}; }
-			else if ( value_str == "I" ) { return {9}; }
-		} else if ( colname == "GEOM" ) {
-			if ( value_str == "TET" ) { return {0}; }
-			else if ( value_str == "TRI" ) { return {1}; }
-			else if ( value_str == "LIN" ) { return {2}; }
-		}
-		// Direct numeric
-		try {
-			return {std::stoi(value_str)};
-		} catch ( std::invalid_argument const & e ) {
-			utility_exit_with_message("Cannot parse value `"+value_str+"` for column `"+colname+"`");
-		}
-	}
-
-	static
-	std::string
-	value_to_string(int value, core::Size col_index) {
-		switch( col_index ) {
-		//case 0:
-		//	return "HYDRO";
-		case 1:
-			switch( value ) {
-				case 0: return "X";
-				case 1: return "C";
-				case 2: return "N";
-				case 3: return "O";
-				case 4: return "S";
-				case 5: return "P";
-				case 6: return "F";
-				case 7: return "Cl";
-				case 8: return "Br";
-				case 9: return "I";
-			}
-			break;
-		case 2:
-			switch( value ) {
-				case 0: return "TET";
-				case 1: return "TRI";
-				case 2: return "LIN";
-			}
-			break;
-		//case 3:
-		//	return "NUMH";
-		//case 4:
-		//	return "NBOND";
-		default:
-			// fall off
-			break;
-		}
-		return std::to_string(value);
-	}
 
 	class FeatureSet {
 
@@ -366,17 +379,6 @@ private:
 class FeatureSpec {
 
 public:
-	struct Condition {
-		core::Size which = 0;
-		core::Size index = 0;
-		int value = -1;
-		bool inv = false;
-
-		std::string to_string() const {
-			return ResidueFeaturizer::column_from_index(index) + ":" + std::to_string(which) + (inv?"!=":"=") + ResidueFeaturizer::value_to_string(value,index);
-		}
-	};
-
 
 	FeatureSpec( utility::vector1< Condition > const & conditions = utility::vector1< Condition >{} ):
 		conditions_(conditions)
@@ -396,18 +398,6 @@ public:
 //	{ restrict: ["COLUMN:POS=VAL","COLUMN:POS!=VAL",...] }
 //	...
 // ]
-
-	static
-	utility::vector1< core::Size >
-	parse_pos( std::string const & pos_designation, std::string const & type = "DIST" ) {
-		if ( ! pos_designation.empty() ) {
-			return utility::vector1< core::Size >{ core::Size( std::stol( pos_designation ) ) };
-		} else if ( type == "DIST" ) {
-			return {1, 2};
-		} else {
-			utility_exit_with_message("Unable to parse position designation `" + pos_designation + "` of type " + type );
-		}
-	}
 
 	static
 	utility::vector1< FeatureSpec >
@@ -445,13 +435,13 @@ public:
 				column_str = split_colon[1];
 
 				// Now convert the designations to Conditions
-				core::Size column = ResidueFeaturizer::column_index(column_str);
+				FeatureType ft = FeatureType_from_string(column_str);
 				for (core::Size pos: parse_pos(pos_str) ) {
 					utility::vector1< Condition > conditions_for_position;
-					for ( int val: ResidueFeaturizer::parse_value(value_str, column_str) ) {
+					for ( int val: parse_feature_value(value_str, column_str) ) {
 						Condition new_cond;
-						new_cond.which = pos;
-						new_cond.index = column;
+						new_cond.pos = pos;
+						new_cond.feature_type = ft;
 						new_cond.value = val;
 						new_cond.inv = inv;
 
@@ -497,14 +487,14 @@ public:
 	bool
 	matches(ResidueFeaturizer::FeatureSet const & fs, core::Size atm, core::Size which) const {
 		for ( Condition const & cond: conditions_ ) {
-			if ( cond.which != which ) { continue; }
+			if ( cond.pos != which ) { continue; }
 			auto const & feature_vector = fs.get_feature_vector();
 			if ( ! feature_vector.count(atm) ) { return false; } // Non-featurized atoms, like virtual atoms
 
 			if ( cond.inv ) {
-				if ( feature_vector.at(atm)[cond.index] == cond.value ) { return false; }
+				if ( feature_vector.at(atm)[int(cond.feature_type)] == cond.value ) { return false; }
 			} else {
-				if ( feature_vector.at(atm)[cond.index] != cond.value ) { return false; }
+				if ( feature_vector.at(atm)[int(cond.feature_type)] != cond.value ) { return false; }
 			}
 		}
 		return true;
@@ -515,6 +505,7 @@ private:
 	utility::vector1< Condition > conditions_;
 
 };
+
 
 /// Contain
 class FeatureDescriber {
