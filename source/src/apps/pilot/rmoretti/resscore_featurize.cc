@@ -32,6 +32,7 @@
 #include <core/import_pose/pose_stream/MetaPoseInputStream.hh>
 
 #include <core/select/residue_selector/ChainSelector.hh>
+#include <core/select/residue_selector/ResidueNameSelector.hh>
 #include <core/select/residue_selector/util.hh>
 
 #include <utility/vector0.hh>
@@ -56,6 +57,7 @@
 static basic::Tracer TR("apps.resscore_featurize");
 
 OPT_KEY( String, ligand_chain )
+OPT_KEY( String, ligand_name3 )
 OPT_KEY( File, config )
 
 static const std::vector< std::string > FEATURE_NAMES = {
@@ -663,6 +665,7 @@ main( int argc, char* argv [] ) {
 	using namespace basic::options::OptionKeys;
 
 	NEW_OPT( ligand_chain, "Which chain letter to use for analysis", "X" );
+	NEW_OPT( ligand_name3, "Which three letter code to use for analysis", "" );
 	NEW_OPT( config, "What (JSON-formatted) configuration file to use", "config.json" );
 
 	try {
@@ -674,7 +677,12 @@ main( int argc, char* argv [] ) {
 		FeatureDescriber feature_describer( config );
 		feature_describer.dump_config( "config_out.json" );
 
-		core::select::residue_selector::ChainSelector ligand_selector( basic::options::option[ basic::options::OptionKeys::ligand_chain ] );
+		core::select::residue_selector::ResidueSelectorOP ligand_selector;
+		if ( basic::options::option[ basic::options::OptionKeys::ligand_name3 ].user() ) {
+			ligand_selector = utility::pointer::make_shared< core::select::residue_selector::ResidueNameSelector >( basic::options::option[ basic::options::OptionKeys::ligand_name3 ], true );
+		} else {
+			ligand_selector = utility::pointer::make_shared< core::select::residue_selector::ChainSelector >( basic::options::option[ basic::options::OptionKeys::ligand_chain ] );
+		}
 
 		using namespace core::import_pose::pose_stream;
 		MetaPoseInputStream input = streams_from_cmd_line();
@@ -696,8 +704,9 @@ main( int argc, char* argv [] ) {
 
 			PoseFeaturizer pose_featurizer(feature_describer, featurizer); // New one for each input
 
-			utility::vector1< core::Size > ligand_residues = core::select::residue_selector::selection_positions( ligand_selector.apply(pose) );
-			utility::vector1< core::Size > other_residues = core::select::residue_selector::unselection_positions( ligand_selector.apply(pose) );
+			utility::vector1< core::Size > ligand_residues = core::select::residue_selector::selection_positions( ligand_selector->apply(pose) );
+			ligand_residues.resize(1); // Just the first residue
+			utility::vector1< core::Size > other_residues = core::select::residue_selector::unselection_positions( ligand_selector->apply(pose) );
 
 			pose_featurizer.featurize( pose, ligand_residues, other_residues );
 
