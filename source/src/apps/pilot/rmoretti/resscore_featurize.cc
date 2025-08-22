@@ -652,7 +652,7 @@ public:
 	dump( std::string const & filename ) {
 		utility::io::ozstream out(filename);
 		json outvalues{ features_ };
-		out << outvalues.dump( 2 );
+		out << outvalues.dump( /*2*/ );
 	}
 
 private:
