@@ -518,6 +518,7 @@ public:
 		output["binning"]["dist_min"] = dist_min_;
 		output["binning"]["dist_max"] = dist_max_;
 		output["binning"]["dist_width"] = dist_width_;
+		output["binning"]["dist_nbins"] = ndistbin();
 
 		json features_out = json::array();
 		for ( auto const & fs: features_ ) {
