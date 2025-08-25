@@ -366,12 +366,9 @@ class FeatureSpec {
 
 public:
 
-	FeatureSpec( utility::vector1< Condition > const & conditions = utility::vector1< Condition >{} )
-	{
-		for ( auto const & cond: conditions ) {
-			conditions_by_pos_[cond.pos].push_back( cond );
-		}
-	}
+	FeatureSpec( int group=999 ):
+		group_(group)
+	{}
 
 	void
 	add_condition( Condition const & cond ) {
@@ -401,8 +398,10 @@ public:
 		for ( auto const & entry: config["features"] ) {
 			// Other non-restrict entries reserved for future use
 
+			int group = entry.value("group",999);
+
 			utility::vector1< FeatureSpec > condition_sets;
-			condition_sets.push_back( FeatureSpec{} );
+			condition_sets.emplace_back( group );
 
 			for ( auto const & cond: entry["restrict"] ) {
 				std::string column_str = "";
@@ -441,9 +440,6 @@ public:
 
 						conditions_for_position.push_back( new_cond );
 					}
-					if ( condition_sets.empty() ) {
-						condition_sets.push_back( FeatureSpec{} );
-					}
 					utility::vector1< FeatureSpec > new_condition_sets;
 					for ( auto const & old_conds: condition_sets ) {
 						for ( auto const & new_cond: conditions_for_position ) {
@@ -457,20 +453,26 @@ public:
 					}
 				}
 			}
+
 			feature_specs.append( condition_sets );
 		}
 
 		return feature_specs;
 	}
 
-	std::vector< std::string >
-	to_string_vector() const {
-		std::vector< std::string > retval;
+	json
+	to_json() const {
+		auto retval = json::object();
+		retval["group"] = group_;
+
+		std::vector< std::string > restrict;
 		for ( auto const & entry: conditions_by_pos_ ) {
 			for ( auto const & cond: entry.second ) {
-				retval.push_back( cond.to_string() );
+				restrict.push_back( cond.to_string() );
 			}
 		}
+		retval["restrict"] = restrict;
+
 		return retval;
 	}
 
@@ -490,6 +492,8 @@ public:
 	}
 
 private:
+
+	int group_ = 999;
 
 	std::map< core::Size, utility::vector1< Condition > > conditions_by_pos_;
 
@@ -522,7 +526,7 @@ public:
 
 		json features_out = json::array();
 		for ( auto const & fs: features_ ) {
-			features_out.push_back( fs.to_string_vector() );
+			features_out.push_back( fs.to_json() );
 		}
 		output["features"] = features_out;
 
