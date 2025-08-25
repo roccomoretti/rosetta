@@ -502,7 +502,9 @@ private:
 class FeatureDescriber {
 public:
 
-	FeatureDescriber( json const & config ) {
+	FeatureDescriber( json const & config ):
+		original_config_( config )
+	{
 		features_ = FeatureSpec::parse_json( config );
 		parse_binning(config);
 	}
@@ -517,7 +519,8 @@ public:
 	}
 
 	void dump_config( std::string const & filename ) const {
-		json output;
+		json output = original_config_; // Copy over everything we're not going to reset.
+
 		output["binning"] = json::object();
 		output["binning"]["dist_min"] = dist_min_;
 		output["binning"]["dist_max"] = dist_max_;
@@ -551,6 +554,8 @@ public:
 	}
 
 private:
+	json original_config_;
+
 	core::Real dist_min_ = 0, dist_max_ = 10, dist_width_ = 0.2;
 
 	utility::vector1< FeatureSpec > features_;
