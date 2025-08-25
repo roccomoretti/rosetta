@@ -360,6 +360,13 @@ struct Condition {
 	std::string to_string() const {
 		return FeatureType_to_string(feature_type) + ":" + std::to_string(pos) + (inv?"!=":"=") + feature_value_to_string(value,feature_type);
 	}
+
+	bool
+	is_same(Condition const & other, bool check_pos=true) const {
+		if ( check_pos && pos != other.pos ) { return false; }
+		return feature_type == other.feature_type && value == other.value && inv == other.inv;
+	}
+
 };
 
 class FeatureSpec {
@@ -372,6 +379,11 @@ public:
 
 	void
 	add_condition( Condition const & cond ) {
+		for ( auto const & curr_cond: conditions_by_pos_[cond.pos] ) {
+			if ( cond.is_same( curr_cond ) ) {
+				return; // Don't double-add a condition.
+			}
+		}
 		conditions_by_pos_[cond.pos].push_back( cond );
 	}
 
@@ -491,6 +503,59 @@ public:
 		return true;
 	}
 
+	bool
+	compare_positions( FeatureSpec const & other, core::Size my_pos, core::Size other_pos ) const {
+		if ( other.conditions_by_pos_.count(other_pos) == 0 && conditions_by_pos_.count(my_pos) == 0 ) {
+			return true; // Not present matches
+		}
+		if ( ( other.conditions_by_pos_.count(other_pos) == 0 && conditions_by_pos_.count(my_pos) != 0 ) ||
+			(conditions_by_pos_.count(my_pos) == 0 && other.conditions_by_pos_.count(other_pos) != 0 )
+		) {
+			return false;
+		}
+		utility::vector1< Condition > const & my_cond = conditions_by_pos_.at(my_pos);
+		utility::vector1< Condition > const & o_cond = other.conditions_by_pos_.at(other_pos);
+		// We make a bit of an assumption that we don't have any duplicate conditions in the list
+		// so if we're the same size and have a match for each, we're matching.
+		if ( my_cond.size() != o_cond.size() ) {
+			return false;
+		}
+		for ( auto const & cond: my_cond ) {
+			bool found = false;
+			for ( auto const & other: o_cond ) {
+				if ( cond.is_same(other, my_pos==other_pos) ) {
+					found = true;
+					break;
+				}
+			}
+			if ( !found ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool
+	is_same( FeatureSpec const & other ) const {
+		bool exact_same = true;
+		for ( auto const & entry: conditions_by_pos_ ) {
+			core::Size pos = entry.first;
+			if ( ! compare_positions(other, pos, pos) ) {
+				exact_same = false;
+				break;
+			}
+		}
+		if ( exact_same ) { return true; }
+
+		// Now we handle distance inversions
+		if ( compare_positions(other, 1, 2) && compare_positions(other, 2, 1) ) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+
 private:
 
 	int group_ = 999;
@@ -505,7 +570,9 @@ public:
 	FeatureDescriber( json const & config ):
 		original_config_( config )
 	{
-		features_ = FeatureSpec::parse_json( config );
+		for ( auto const & new_fs: FeatureSpec::parse_json( config ) ) {
+			add_feature_spec(new_fs);
+		}
 		parse_binning(config);
 	}
 
@@ -551,6 +618,17 @@ public:
 	utility::vector1< FeatureSpec > const &
 	get_features() const {
 		return features_;
+	}
+
+	void
+	add_feature_spec(FeatureSpec const & fs) {
+		for ( auto const & old_fs: features_ ) {
+			if ( fs.is_same(old_fs) ) {
+				//TR << "Feature \n\t" << fs.to_json() << " is the same as\n\t" << old_fs.to_json() << std::endl;
+				return;
+			}
+		}
+		features_.push_back(fs);
 	}
 
 private:
