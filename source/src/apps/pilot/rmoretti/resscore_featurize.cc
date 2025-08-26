@@ -108,7 +108,7 @@ parse_feature_value(std::string const & value_str, std::string const & colname) 
 		if (colname == "ELEM") {
 			return {1,2,3,4,5,6,7,8,9,0};
 		} else if ( colname == "GEOM" ) {
-			return {0,1,2};
+			return {0,1,2,3};
 		} else if ( colname == "NUMH" ) {
 			return {0,1,2,3,4};
 		} else if ( colname == "NBOND" ) {
@@ -132,6 +132,7 @@ parse_feature_value(std::string const & value_str, std::string const & colname) 
 		if ( value_str == "TET" ) { return {0}; }
 		else if ( value_str == "TRI" ) { return {1}; }
 		else if ( value_str == "LIN" ) { return {2}; }
+		else if ( value_str == "UNK" ) { return {3}; }
 	}
 	// Direct numeric
 	try {
@@ -163,6 +164,7 @@ feature_value_to_string(int value, FeatureType ft) {
 			case 0: return "TET";
 			case 1: return "TRI";
 			case 2: return "LIN";
+			case 3: return "UNK";
 		}
 		break;
 	default:
@@ -253,6 +255,7 @@ public:
 		static constexpr int TET = 0;
 		static constexpr int TRI = 1;
 		static constexpr int LIN = 2;
+		static constexpr int UNK = 3;
 
 		core::Size atm = atm_in;
 		if ( restype.atom_is_hydrogen(atm_in) ) {
@@ -260,6 +263,9 @@ public:
 		}
 
 		auto types = restype.bonded_neighbor_types(atm);
+		if ( types.size() == 0 ) {
+			return UNK;
+		}
 
 		core::Size n_double = 0, n_aro = 0, n_triple = 0;
 		for ( auto type: restype.bonded_neighbor_types(atm) ) {
@@ -284,26 +290,45 @@ public:
 		if ( n_aro > 0 ) {
 			return TRI;
 		}
-		if ( n_double == 0 ) {
-			// TODO: Deal with COO, CON, etc. (and the connections)
-			return TET; // all single bondes
-		}
 
-		auto elem = restype.element(atm); // base for hydrogens.
-		if ( elem == core::chemical::element::P || elem == core::chemical::element::S ) {
-			if ( n_double >= 2 ) {
+		if ( n_double == 0 ) {
+			// Check for amide, carboxylate, aromatic amine, etc.
+			if ( has_lone_pair_and_attached_to_delocalizable_pi(restype, atm) ) {
+					return TRI;
+			}
+			return TET; // all single bondes
+		} else if ( n_double == 1 ) {
+			return TRI;
+		} else { // n_double >= 2
+			auto elem = restype.element(atm); // base for hydrogens.
+			if ( elem == core::chemical::element::P || elem == core::chemical::element::S ) {
 				return TET; // Phoshpate, sulfate
 			} else {
-				return TRI;
-			}
-		} else {
-			if (n_double >= 2) {
 				return LIN; // C=C=C
-			} else {
-				return TRI;
 			}
 		}
 		return TET; // should never get here
+	}
+
+	static
+	bool
+	has_lone_pair_and_attached_to_delocalizable_pi(core::chemical::ResidueType const & restype, core::Size atm) {
+		auto elem = restype.element(atm);
+		if ( elem != core::chemical::element::O && elem != core::chemical::element::N && elem != core::chemical::element::S ) {
+			return false; // Does not have lone pair
+		}
+		for ( core::Size nbr: restype.bonded_neighbor(atm) ) {
+			auto nbr_elem = restype.element(nbr);
+			if ( nbr_elem != core::chemical::element::C && elem != core::chemical::element::N ) {
+				continue;
+			}
+			for ( auto nbr_bond_type: restype.bonded_neighbor_types(nbr) ) {
+				if ( nbr_bond_type == core::chemical::BondName::DoubleBond || nbr_bond_type == core::chemical::BondName::AromaticBond ) {
+					return true; // At least one delocalizable pi system
+				}
+			}
+		}
+		return false; // No delocalizable pi found
 	}
 
 	static
