@@ -106,7 +106,7 @@ utility::vector1< int >
 parse_feature_value(std::string const & value_str, std::string const & colname) {
 	if ( value_str.empty() ) {
 		if (colname == "ELEM") {
-			return {1,2,3,4,5,6,7,8,9};
+			return {1,2,3,4,5,6,7,8,9,0};
 		} else if ( colname == "GEOM" ) {
 			return {0,1,2};
 		} else if ( colname == "NUMH" ) {
