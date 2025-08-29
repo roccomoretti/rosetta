@@ -177,7 +177,11 @@ feature_value_to_string(int value, FeatureType ft) {
 utility::vector1< core::Size >
 parse_pos( std::string const & pos_designation, std::string const & type = "DIST" ) {
 	if ( ! pos_designation.empty() ) {
-		return utility::vector1< core::Size >{ core::Size( std::stol( pos_designation ) ) };
+		core::Size pos = std::stol( pos_designation );
+		if ( type == "DIST" && (pos < 1 || pos > 20 ) ) {
+			utility_exit_with_message("Positions for distances must be either 1 or 2");
+		}
+		return utility::vector1< core::Size >{ pos };
 	} else if ( type == "DIST" ) {
 		return {1, 2};
 	} else {
@@ -673,6 +677,7 @@ public:
 		feature_describer_(feature_describer)
 	{}
 
+	/// Does the atom in this residue type meet the criteria for being in the specified position in each feature (a vector of bools, one for each position)
 	utility::vector1< bool > const &
 	get_feature_vector( core::chemical::ResidueType const & restype, core::Size atm, int pos ) {
 		std::string const & name = restype.name();
@@ -732,22 +737,22 @@ public:
 				}
 
 				for ( core::Size ai(1); ai <= ii_res.natoms(); ++ai ) {
-					utility::vector1< bool > const & ii_atom_feat0 = residue_featurizer_.get_feature_vector(ii_type,ai,0);//feature_describer_.matches( fs_ii, ai, 0 );
-					utility::vector1< bool > const & ii_atom_feat1 = residue_featurizer_.get_feature_vector(ii_type,ai,1);//feature_describer_.matches( fs_ii, ai, 1 );
+					utility::vector1< bool > const & ii_atom_feat1 = residue_featurizer_.get_feature_vector(ii_type,ai,1);
+					utility::vector1< bool > const & ii_atom_feat2 = residue_featurizer_.get_feature_vector(ii_type,ai,2);
 
 					for ( core::Size aj(1); aj <= jj_res.natoms(); ++aj ) {
 						core::Real dist = ii_res.xyz(ai).distance( jj_res.xyz(aj) );
 						if ( dist > dist_max ) { continue; } // Too far
 
-						utility::vector1< bool > const & jj_atom_feat0 = residue_featurizer_.get_feature_vector(jj_type,aj,0);//feature_describer_.matches( fs_jj, aj, 0 );
-						utility::vector1< bool > const & jj_atom_feat1 = residue_featurizer_.get_feature_vector(jj_type,aj,1);//feature_describer_.matches( fs_jj, aj, 1 );
+						utility::vector1< bool > const & jj_atom_feat1 = residue_featurizer_.get_feature_vector(jj_type,aj,1);
+						utility::vector1< bool > const & jj_atom_feat2 = residue_featurizer_.get_feature_vector(jj_type,aj,2);
 						core::Size distbin = feature_describer_.distbin(dist);
 
 						for ( core::Size ff(1); ff <= feature_describer_.nfeatures(); ++ff ) {
-							if ( ii_atom_feat0[ff] && jj_atom_feat1[ff] ) {
+							if ( ii_atom_feat1[ff] && jj_atom_feat2[ff] ) {
 								++features_[ff][distbin];
 							}
-							if ( jj_atom_feat0[ff] && ii_atom_feat1[ff] ) {
+							if ( jj_atom_feat1[ff] && ii_atom_feat2[ff] ) {
 								++features_[ff][distbin];
 							}
 						}
