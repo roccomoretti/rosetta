@@ -33,6 +33,7 @@
 
 #include <core/select/residue_selector/ChainSelector.hh>
 #include <core/select/residue_selector/ResidueNameSelector.hh>
+#include <core/select/residue_selector/ResidueIndexSelector.hh>
 #include <core/select/residue_selector/util.hh>
 
 #include <utility/vector0.hh>
@@ -58,6 +59,7 @@ static basic::Tracer TR("apps.resscore_featurize");
 
 OPT_KEY( String, ligand_chain )
 OPT_KEY( String, ligand_name3 )
+OPT_KEY( File, ligand_file ) // A file listing the ligands for each PDB
 OPT_KEY( File, config )
 
 enum class FeatureType {
@@ -795,6 +797,7 @@ main( int argc, char* argv [] ) {
 
 	NEW_OPT( ligand_chain, "Which chain letter to use for analysis", "X" );
 	NEW_OPT( ligand_name3, "Which three letter code to use for analysis", "" );
+	NEW_OPT( ligand_file, "A file listing the ligand position for each PDB", "" );
 	NEW_OPT( config, "What (JSON-formatted) configuration file to use", "config.json" );
 
 	try {
@@ -813,6 +816,21 @@ main( int argc, char* argv [] ) {
 			ligand_selector = utility::pointer::make_shared< core::select::residue_selector::ChainSelector >( basic::options::option[ basic::options::OptionKeys::ligand_chain ] );
 		}
 
+		std::map< std::string, std::string > ligand_mapping;
+		if ( basic::options::option[ basic::options::OptionKeys::ligand_file ].user() ) {
+			utility::io::izstream ligfile( basic::options::option[ basic::options::OptionKeys::ligand_file ] );
+			std::string line;
+			while ( ligfile.getline(line) ) {
+				utility::vector1< std::string > splitline = utility::string_split( line );
+				if ( splitline.empty() ) { continue; }
+				if ( splitline.size() >= 2 ) {
+					ligand_mapping[ splitline[1] ] = ligand_mapping[ splitline[2] ];
+				} else {
+					ligand_mapping[ splitline[1] ] = "";
+				}
+			}
+		}
+
 		using namespace core::import_pose::pose_stream;
 		MetaPoseInputStream input = streams_from_cmd_line();
 		core::chemical::ResidueTypeSetCOP rsd_set;
@@ -826,20 +844,30 @@ main( int argc, char* argv [] ) {
 
 		while ( input.has_another_pose() ) {
 			clock_t starttime = clock();
+			TR << "Processing " << core::pose::tag_from_pose(pose) << std::endl;
 
 			input.fill_pose( pose, *rsd_set );
+			std::string pose_tag = utility::file::FileName( core::pose::tag_from_pose(pose) ).base();
 
-			TR << "Processing " << core::pose::tag_from_pose(pose) << std::endl;
+			core::select::residue_selector::ResidueSelectorOP my_ligand_selector = ligand_selector;
+			if ( ligand_mapping.count( pose_tag ) ) {
+				if ( ligand_mapping[pose_tag].empty() ) {
+					TR.Warning << "Ligand correspondence for " << pose_tag << " is missing -- skipping" << std::endl;
+					continue;
+				}
+				TR << "Using residue " << ligand_mapping[pose_tag] << " for " << pose_tag << std::endl;
+				my_ligand_selector = utility::pointer::make_shared< core::select::residue_selector::ResidueIndexSelector >(ligand_mapping[pose_tag]);
+			}
 
 			PoseFeaturizer pose_featurizer(feature_describer, featurizer); // New one for each input
 
-			utility::vector1< core::Size > ligand_residues = core::select::residue_selector::selection_positions( ligand_selector->apply(pose) );
+			utility::vector1< core::Size > ligand_residues = core::select::residue_selector::selection_positions( my_ligand_selector->apply(pose) );
 			ligand_residues.resize(1); // Just the first residue
-			utility::vector1< core::Size > other_residues = core::select::residue_selector::unselection_positions( ligand_selector->apply(pose) );
+			utility::vector1< core::Size > other_residues = core::select::residue_selector::unselection_positions( my_ligand_selector->apply(pose) );
 
 			pose_featurizer.featurize( pose, ligand_residues, other_residues );
 
-			std::string filename = std::string(basic::options::option[ out::path::all ].value()) + utility::file::FileName( core::pose::tag_from_pose(pose) ).base() + ".json.gz";
+			std::string filename = std::string(basic::options::option[ out::path::all ].value()) + pose_tag + ".json.gz";
 			TR << "Saving data to `" << filename << "`" << std::endl;
 
 			pose_featurizer.dump(filename);
