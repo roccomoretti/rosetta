@@ -18,6 +18,8 @@
 #include <core/chemical/ResidueType.hh>
 #include <core/conformation/Residue.hh>
 
+#include <core/chemical/AtomTypeSet.hh>
+
 #include <core/scoring/Energies.hh>
 #include <core/scoring/EnergyGraph.hh>
 #include <core/scoring/methods/EnergyMethodOptions.hh>
@@ -67,7 +69,9 @@ enum class FeatureType {
 	ELEM,
 	GEOM,
 	NUMH,
-	NBOND
+	NBOND,
+	RTYPE,
+	PCHARGE,
 };
 
 FeatureType
@@ -82,6 +86,10 @@ FeatureType_from_string(std::string const & type_str) {
 		return FeatureType::NUMH;
 	} else if ( type_str == "NBOND" ) {
 		return FeatureType::NBOND;
+	} else if ( type_str == "RTYPE" ) {
+		return FeatureType::RTYPE;
+	} else if ( type_str == "PCHARGE" ) {
+		return FeatureType::PCHARGE;
 	} else {
 		utility_exit_with_message("Cannot interpret `"+type_str+"` as a feature type name");
 	}
@@ -100,9 +108,23 @@ FeatureType_to_string(FeatureType ft) {
 		return "NUMH";
 	case FeatureType::NBOND:
 		return "NBOND";
+	case FeatureType::RTYPE:
+		return "RTYPE";
+	case FeatureType::PCHARGE:
+		return "PCHARGE";
 	}
 	utility_exit_with_message("Can't understand feature specification");
 }
+
+constexpr core::Size MAX_RTYPE_VAL = 30; // 30 is somewhat arbitrary here.
+
+int pcharge_to_int(core::Real charge) {
+	int index = std::round(charge * 5) + 4; // ( 0.2 -> 1; -0.8 -> -4 -> 0; )
+	if ( index < 0 ) { index = 0; } // ( -0.8 -> -4 -> 0 -- anything below is collapsed
+	if ( index > 8 ) { index = 8; } // ( 0.8 -> 4 -> 8 -- anything above is collapsed
+	return index;
+}
+
 
 utility::vector1< int >
 parse_feature_value(std::string const & value_str, std::string const & colname) {
@@ -115,6 +137,15 @@ parse_feature_value(std::string const & value_str, std::string const & colname) 
 			return {0,1,2,3,4};
 		} else if ( colname == "NBOND" ) {
 			return {1,2,3,4,0};
+		} else if ( colname == "RTYPE" ) {
+			utility::vector1< int > types;
+			for ( core::Size ii(1); ii <= MAX_RTYPE_VAL; ++ii ) {
+				types.push_back(ii);
+			}
+			types.push_back(0);
+			return types;
+		} else if ( colname == "PCHARGE" ) {
+			return {0,1,2,3,4,5,6,7,8}; // 0.2 bins from -0.8 to 0.8, inclusive // Is this the way to do this?
 		} else {
 			utility_exit_with_message("Cannot column `"+colname+"`");
 		}
@@ -135,7 +166,18 @@ parse_feature_value(std::string const & value_str, std::string const & colname) 
 		else if ( value_str == "TRI" ) { return {1}; }
 		else if ( value_str == "LIN" ) { return {2}; }
 		else if ( value_str == "UNK" ) { return {3}; }
+	} else if ( colname == "RTYPE" ) {
+		if ( value_str == "UNK" ) { return {0}; }
+		core::chemical::AtomTypeSetCOP ats = core::chemical::ChemicalManager::get_instance()->atom_type_set("fa_standard");
+		if ( ats->has_atom( value_str ) ) {
+			return { ats->atom_type_index( value_str ) };
+		}
+	} else if ( colname == "PCHARGE" ) {
+		if ( value_str.find('.') != std::string::npos ) { // If not decimal, assume index-based
+			return { pcharge_to_int( std::stod(value_str) ) };
+		}
 	}
+
 	// Direct numeric
 	try {
 		return {std::stoi(value_str)};
@@ -169,6 +211,12 @@ feature_value_to_string(int value, FeatureType ft) {
 			case 3: return "UNK";
 		}
 		break;
+	case FeatureType::RTYPE:
+	{
+		if ( value == 0 ) { return "UNK"; }
+		core::chemical::AtomTypeSetCOP ats = core::chemical::ChemicalManager::get_instance()->atom_type_set("fa_standard");
+		return (*ats)[value].atom_type_name();
+	}
 	default:
 		// The rest are numeric
 		break;
@@ -217,6 +265,10 @@ public:
 			return get_nhydro(restype,atm);
 		case FeatureType::NBOND:
 			return get_bonded(restype,atm);
+		case FeatureType::RTYPE:
+			return get_rtype(restype,atm);
+		case FeatureType::PCHARGE:
+			return get_pcharge(restype,atm);
 		}
 		utility_exit_with_message("Can't understand feature type");
 	}
@@ -379,6 +431,28 @@ public:
 		}
 	}
 
+	static
+	int
+	get_rtype(core::chemical::ResidueType const & restype, core::Size atm_in) {
+		core::Size atm = atm_in;
+		if ( restype.atom_is_hydrogen(atm_in) ) {
+			// While hydrogens have their own Rosetta types, it's entirely dependent on what they're bonded to, which is a richer feature data
+			atm = restype.atom_base(atm_in);
+		}
+
+		core::Size atype = restype.atom_type_index(atm);
+		if ( atype > MAX_RTYPE_VAL ) { atype = 0; }
+		return atype;
+	}
+
+	static
+	int
+	get_pcharge(core::chemical::ResidueType const & restype, core::Size atm_in) {
+		// For hydrogens, we're returning the partial charge of the hydrogen itself
+
+		core::Real charge = restype.atom_charge(atm_in);
+		return pcharge_to_int(charge);
+	}
 private:
 };
 
