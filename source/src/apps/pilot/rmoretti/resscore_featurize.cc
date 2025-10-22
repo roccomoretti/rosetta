@@ -63,6 +63,7 @@ OPT_KEY( String, ligand_chain )
 OPT_KEY( String, ligand_name3 )
 OPT_KEY( File, ligand_file ) // A file listing the ligands for each PDB
 OPT_KEY( File, config )
+OPT_KEY( Boolean, preparsed_config ) // Whether to take the config as pre-parsed
 
 enum class FeatureType {
 	HYDRO,
@@ -123,6 +124,11 @@ int pcharge_to_int(core::Real charge) {
 	if ( index < 0 ) { index = 0; } // ( -0.8 -> -4 -> 0 -- anything below is collapsed
 	if ( index > 8 ) { index = 8; } // ( 0.8 -> 4 -> 8 -- anything above is collapsed
 	return index;
+}
+
+std::string pcharge_index_to_string( int index ) {
+	core::Real charge = (index-4.0)/5;
+	return std::to_string(charge);
 }
 
 
@@ -217,6 +223,8 @@ feature_value_to_string(int value, FeatureType ft) {
 		core::chemical::AtomTypeSetCOP ats = core::chemical::ChemicalManager::get_instance()->atom_type_set("fa_standard");
 		return (*ats)[value].atom_type_name();
 	}
+	case FeatureType::PCHARGE:
+		return pcharge_index_to_string(value);
 	default:
 		// The rest are numeric
 		break;
@@ -482,6 +490,10 @@ public:
 		group_(group)
 	{}
 
+	int group() const {
+		return group_;
+	}
+
 	void
 	add_condition( Condition const & cond ) {
 		for ( auto const & curr_cond: conditions_by_pos_[cond.pos] ) {
@@ -509,70 +521,104 @@ public:
 
 	static
 	utility::vector1< FeatureSpec >
+	parse_one_feature_spec( json const & entry, int group_val = 1 ) {
+
+		int group = entry.value("group",group_val);
+
+		// This is only one spec in the JSON file, but it can expand to multiple ones
+		utility::vector1< FeatureSpec > condition_sets;
+		condition_sets.emplace_back( group );
+
+		// Other non-restrict entries reserved for future use
+		for ( auto const & cond: entry["restrict"] ) {
+			std::string column_str = "";
+			std::string pos_str = "";
+			std::string value_str = "";
+			bool inv = false;
+
+			utility::vector1<std::string> split_eq = utility::string_split(cond, '=');
+			if ( split_eq.size() == 0 ) { continue; }
+			if ( split_eq.size() > 2 ) { utility_exit_with_message("Too many '=' in `restrict`"); }
+			if ( split_eq.size() == 2) {
+				value_str = split_eq[2];
+			}
+			std::string colpos = split_eq[1];
+			if ( colpos[ colpos.size()-1 ] == '!' ) {
+				inv = true;
+				colpos = colpos.substr(0, colpos.size()-1);
+			}
+			utility::vector1<std::string> split_colon = utility::string_split(colpos, ':');
+			if ( split_colon.size() > 2 ) { utility_exit_with_message("Too many ':' in `restrict`"); }
+			if ( split_colon.size() == 2 ) {
+				pos_str = split_colon[2];
+			}
+			column_str = split_colon[1];
+
+			// Now convert the designations to Conditions
+			FeatureType ft = FeatureType_from_string(column_str);
+			for (core::Size pos: parse_pos(pos_str) ) {
+				utility::vector1< Condition > conditions_for_position;
+				for ( int val: parse_feature_value(value_str, column_str) ) {
+					Condition new_cond;
+					new_cond.pos = pos;
+					new_cond.feature_type = ft;
+					new_cond.value = val;
+					new_cond.inv = inv;
+
+					conditions_for_position.push_back( new_cond );
+				}
+				utility::vector1< FeatureSpec > new_condition_sets;
+				for ( auto const & old_conds: condition_sets ) {
+					for ( auto const & new_cond: conditions_for_position ) {
+						FeatureSpec new_conds( old_conds );
+						new_conds.add_condition( new_cond );
+						new_condition_sets.emplace_back( std::move(new_conds) );
+					}
+				}
+				if ( new_condition_sets.size() >= condition_sets.size() ) {
+					condition_sets = std::move(new_condition_sets);
+				}
+			}
+		}
+		return condition_sets;
+	}
+
+	static
+	utility::vector1< FeatureSpec >
 	parse_json( json const & config ) {
 		utility::vector1< FeatureSpec > feature_specs;
 
+		int current_group = 1; // For unlabled groups
+		std::set< int > seen_groups;
+
 		for ( auto const & entry: config["features"] ) {
-			// Other non-restrict entries reserved for future use
-
-			int group = entry.value("group",999);
-
 			utility::vector1< FeatureSpec > condition_sets;
-			condition_sets.emplace_back( group );
 
-			for ( auto const & cond: entry["restrict"] ) {
-				std::string column_str = "";
-				std::string pos_str = "";
-				std::string value_str = "";
-				bool inv = false;
+			if ( entry.is_object() ) {
+				condition_sets.append( parse_one_feature_spec( entry, current_group ) );
+			} else if ( entry.is_array() ) {
+				for ( auto const & subentry: entry ) {
+					// Keep the current set value for all
+					condition_sets.append( parse_one_feature_spec( subentry, current_group ) );
+				}
+			} else {
+				TR << "Can't understand feature entry -- ignoring" << std::endl;
+				TR << entry << std::endl;
+				continue;
+			}
+			feature_specs.append( condition_sets );
 
-				utility::vector1<std::string> split_eq = utility::string_split(cond, '=');
-				if ( split_eq.size() == 0 ) { continue; }
-				if ( split_eq.size() > 2 ) { utility_exit_with_message("Too many '=' in `restrict`"); }
-				if ( split_eq.size() == 2) {
-					value_str = split_eq[2];
-				}
-				std::string colpos = split_eq[1];
-				if ( colpos[ colpos.size()-1 ] == '!' ) {
-					inv = true;
-					colpos = colpos.substr(0, colpos.size()-1);
-				}
-				utility::vector1<std::string> split_colon = utility::string_split(colpos, ':');
-				if ( split_colon.size() > 2 ) { utility_exit_with_message("Too many ':' in `restrict`"); }
-				if ( split_colon.size() == 2 ) {
-					pos_str = split_colon[2];
-				}
-				column_str = split_colon[1];
-
-				// Now convert the designations to Conditions
-				FeatureType ft = FeatureType_from_string(column_str);
-				for (core::Size pos: parse_pos(pos_str) ) {
-					utility::vector1< Condition > conditions_for_position;
-					for ( int val: parse_feature_value(value_str, column_str) ) {
-						Condition new_cond;
-						new_cond.pos = pos;
-						new_cond.feature_type = ft;
-						new_cond.value = val;
-						new_cond.inv = inv;
-
-						conditions_for_position.push_back( new_cond );
-					}
-					utility::vector1< FeatureSpec > new_condition_sets;
-					for ( auto const & old_conds: condition_sets ) {
-						for ( auto const & new_cond: conditions_for_position ) {
-							FeatureSpec new_conds( old_conds );
-							new_conds.add_condition( new_cond );
-							new_condition_sets.emplace_back( std::move(new_conds) );
-						}
-					}
-					if ( new_condition_sets.size() >= condition_sets.size() ) {
-						condition_sets = std::move(new_condition_sets);
-					}
-				}
+			// Now update the current group set
+			for ( auto const & fs: condition_sets ) {
+				seen_groups.insert( fs.group() );
+			}
+			while ( seen_groups.count(current_group) ) {
+				++current_group;
 			}
 
-			feature_specs.append( condition_sets );
 		}
+
+		TR << "Parsed " << feature_specs.size() << " entries in the json specification." << std::endl;
 
 		return feature_specs;
 	}
@@ -727,10 +773,14 @@ public:
 
 	void
 	add_feature_spec(FeatureSpec const & fs) {
-		for ( auto const & old_fs: features_ ) {
-			if ( fs.is_same(old_fs) ) {
-				//TR << "Feature \n\t" << fs.to_json() << " is the same as\n\t" << old_fs.to_json() << std::endl;
-				return;
+		// If pre-parsed, assume that we've already cleared out duplicates
+		// This saves a bunch of time
+		if ( ! basic::options::option[ basic::options::OptionKeys::preparsed_config ].value() ) {
+			for ( auto const & old_fs: features_ ) {
+				if ( fs.is_same(old_fs) ) {
+					//TR << "Feature \n\t" << fs.to_json() << " is the same as\n\t" << old_fs.to_json() << std::endl;
+					return;
+				}
 			}
 		}
 		features_.push_back(fs);
@@ -873,6 +923,7 @@ main( int argc, char* argv [] ) {
 	NEW_OPT( ligand_name3, "Which three letter code to use for analysis", "" );
 	NEW_OPT( ligand_file, "A file listing the ligand position for each PDB", "" );
 	NEW_OPT( config, "What (JSON-formatted) configuration file to use", "config.json" );
+	NEW_OPT( preparsed_config, "Interpret the config as being pre-parsed and sanitized", false );
 
 	try {
 
@@ -881,7 +932,10 @@ main( int argc, char* argv [] ) {
 		json config = load_config( basic::options::option[ basic::options::OptionKeys::config ] );
 
 		FeatureDescriber feature_describer( config );
-		feature_describer.dump_config( "config_out.json" );
+		if ( ! basic::options::option[ basic::options::OptionKeys::preparsed_config ].value() ) {
+			TR << "Writing interpreted configuration to config_out.json" << std::endl;
+			feature_describer.dump_config( "config_out.json" );
+		}
 
 		core::select::residue_selector::ResidueSelectorOP ligand_selector;
 		if ( basic::options::option[ basic::options::OptionKeys::ligand_name3 ].user() ) {
