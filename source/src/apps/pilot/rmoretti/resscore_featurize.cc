@@ -595,23 +595,24 @@ public:
 			utility::vector1< FeatureSpec > condition_sets;
 
 			if ( entry.is_object() ) {
-				condition_sets.append( parse_one_feature_spec( entry, current_group ) );
+				for ( auto & fs: parse_one_feature_spec( entry, current_group ) ) {
+					seen_groups.insert( fs.group() );
+					feature_specs.emplace_back( std::move(fs) );
+				}
 			} else if ( entry.is_array() ) {
 				for ( auto const & subentry: entry ) {
 					// Keep the current set value for all
-					condition_sets.append( parse_one_feature_spec( subentry, current_group ) );
+					for ( auto & fs: parse_one_feature_spec( subentry, current_group ) ) {
+						seen_groups.insert( fs.group() );
+						feature_specs.emplace_back( std::move(fs) );
+					}
 				}
 			} else {
 				TR << "Can't understand feature entry -- ignoring" << std::endl;
 				TR << entry << std::endl;
 				continue;
 			}
-			feature_specs.append( condition_sets );
 
-			// Now update the current group set
-			for ( auto const & fs: condition_sets ) {
-				seen_groups.insert( fs.group() );
-			}
 			while ( seen_groups.count(current_group) ) {
 				++current_group;
 			}
