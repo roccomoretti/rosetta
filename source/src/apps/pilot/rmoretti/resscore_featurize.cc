@@ -866,6 +866,7 @@ public:
 			core::conformation::Residue const & ii_res = pose.residue(ii);
 			core::chemical::ResidueType const & ii_type = ii_res.type();
 
+			// Compute residue-residue interactions
 			for( core::Size jj: other ) {
 				core::conformation::Residue const & jj_res = pose.residue(jj);
 				core::chemical::ResidueType const & jj_type = jj_res.type();
@@ -898,6 +899,17 @@ public:
 				}
 
 			}
+
+			// Compute internal (e.g. score) values
+			if ( pose.energies().energies_updated() ) {
+				auto res_energies = pose.energies().residue_total_energies(ii) * pose.energies().weights();
+				for ( int ii = 1; ii <= core::scoring::n_score_types; ++ii ) {
+					core::scoring::ScoreType const type = core::scoring::ScoreType(ii);
+					if ( res_energies[ type ] == 0.0 ) continue; // Avoid adding entry for zeros
+					score_values_[ core::scoring::name_from_score_type(type) ] += res_energies[ type ];
+				}
+				score_values_["total"] += pose.energies().residue_total_energy(ii);
+			}
 		}
 	}
 
@@ -909,6 +921,9 @@ public:
 		json output;
 		//output["dist_feat"] = feature_describer_.get_dist_feature_spec();
 		output["dist"] = dist_features_;
+		if ( ! score_values_.empty() ) {
+			output["scores"] = score_values_;
+		}
 		out << output.dump( /*2*/ );
 	}
 
@@ -918,6 +933,9 @@ private:
 
 	// Indexed by feature number, then by distance binning, storing counts of interactions.
 	utility::vector1< utility::vector0< int > > dist_features_;
+
+	// By score type name
+	std::map< std::string, core::Real > score_values_;
 
 };
 
@@ -981,6 +999,8 @@ main( int argc, char* argv [] ) {
 
 		ResidueFeaturizer featurizer(feature_describer);
 
+		core::scoring::ScoreFunctionOP sfxn( core::scoring::get_score_function() );
+
 		core::pose::Pose pose;
 
 		while ( input.has_another_pose() ) {
@@ -989,6 +1009,7 @@ main( int argc, char* argv [] ) {
 
 			input.fill_pose( pose, *rsd_set );
 			std::string pose_tag = utility::file::FileName( core::pose::tag_from_pose(pose) ).base();
+			sfxn->score(pose);
 
 			core::select::residue_selector::ResidueSelectorOP my_ligand_selector = ligand_selector;
 			if ( ligand_mapping.count( pose_tag ) ) {
