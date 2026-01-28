@@ -787,6 +787,16 @@ public:
 		features_.push_back(fs);
 	}
 
+	json
+	get_dist_feature_spec() const {
+		json spec = json::array();
+
+		for( FeatureSpec const & fs: features_ ) {
+			spec.push_back( fs.to_json() );
+		}
+		return spec;
+	}
+
 private:
 	json original_config_;
 
@@ -841,9 +851,9 @@ public:
 		feature_describer_(fd),
 		residue_featurizer_(rf)
 	{
-		features_.resize( feature_describer_.nfeatures() );
+		dist_features_.resize( feature_describer_.nfeatures() );
 		for ( core::Size ii(1); ii <= feature_describer_.nfeatures(); ++ii ) {
-			features_[ii].resize( feature_describer_.ndistbin() );
+			dist_features_[ii].resize( feature_describer_.ndistbin() );
 		}
 	}
 
@@ -877,10 +887,10 @@ public:
 
 						for ( core::Size ff(1); ff <= feature_describer_.nfeatures(); ++ff ) {
 							if ( ii_atom_feat1[ff] && jj_atom_feat2[ff] ) {
-								++features_[ff][distbin];
+								++dist_features_[ff][distbin];
 							}
 							if ( jj_atom_feat1[ff] && ii_atom_feat2[ff] ) {
-								++features_[ff][distbin];
+								++dist_features_[ff][distbin];
 							}
 						}
 
@@ -894,10 +904,12 @@ public:
 public:
 
 	void
-	dump( std::string const & filename ) {
+	dump( std::string const & filename ) const {
 		utility::io::ozstream out(filename);
-		json outvalues{ features_ };
-		out << outvalues.dump( /*2*/ );
+		json output;
+		//output["dist_feat"] = feature_describer_.get_dist_feature_spec();
+		output["dist"] = dist_features_;
+		out << output.dump( /*2*/ );
 	}
 
 private:
@@ -905,7 +917,7 @@ private:
 	ResidueFeaturizer & residue_featurizer_;
 
 	// Indexed by feature number, then by distance binning, storing counts of interactions.
-	utility::vector1< utility::vector0< int > > features_;
+	utility::vector1< utility::vector0< int > > dist_features_;
 
 };
 
