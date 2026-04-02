@@ -379,6 +379,10 @@ bool BinarySilentStruct::init_from_lines(
 			} else if ( iter->substr(0,2) == "RT" ) {
 				kinematics::Jump jump;
 				line_stream >> jump;
+				if ( ! jump.ortho_check() ) { // Happens internally in stream output.
+					tr.Error << "Issue with formatting in RT line" << std::endl;
+					return false;
+				}
 				tr.Debug << "read jump " << jump << std::endl;
 				add_jump( jump );
 				// modern style jumps, defined completely with the FoldTree
@@ -460,9 +464,17 @@ bool BinarySilentStruct::init_from_lines(
 			secstruct_[currpos] = tag[0];  // first char is sec struct
 
 			int natoms = (tag.length()-1) / 16;
+			if (natoms < 1) {
+				tr.Error << "issue with atom coordinate line -- insufficient data for atom coordinates" << std::endl;
+				return false;
+			}
 			utility::vector1< numeric::xyzVector <float> > atm_buff( natoms+1 );
 			core::Size const vecsize( sizeof( numeric::xyzVector<float> ) * (natoms + 1) );
 			utility::decode6bit( (unsigned char*)&(atm_buff[1]) , tag.substr(1), vecsize );
+			if ( atm_buff.size() < core::Size(natoms) || atm_buff.size() > core::Size(natoms+1) ) {
+				tr.Error << "issue decoding atom coordinates. Expected " << natoms << " atoms, found " << atm_buff.size() << std::endl;
+				return false;
+			}
 
 			// option to force bit flip:
 			if ( force_bitflip() ) {
