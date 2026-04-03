@@ -18,6 +18,8 @@
 
 #include <basic/options/option.hh>
 
+#include <core/io/silent/SilentFileData.hh>
+
 #include <protocols/moves/NullMover.hh>
 #include <protocols/jobdist/not_universal_main.hh>
 
@@ -33,6 +35,7 @@
 
 #include <utility/excn/Exceptions.hh>
 
+OPT_KEY( Boolean, quick )
 
 int
 main( int argc, char* argv [] ) {
@@ -51,6 +54,7 @@ main( int argc, char* argv [] ) {
 		OPT( in::file::residue_type_set );
 		OPT( out::file::silent );
 		OPT( out::file::silent_struct_type );
+		NEW_OPT( quick, "Do a fast combine, skipping passing through Pose. Only relevant for silent to silent transformations", false );
 
 		// options, random initialization
 		devel::init( argc, argv );
@@ -64,8 +68,17 @@ main( int argc, char* argv [] ) {
 			std::exit(1);
 		}
 
-		protocols::moves::NullMover mover;
-		protocols::jobdist::not_universal_main( mover );
+		if ( option[ quick ] ) {
+			core::io::silent::SilentFileData sfd{ core::io::silent::SilentFileOptions() };
+			for ( std::string infile: option[ in::file::silent ]() ) {
+				sfd.read_file( infile );
+			}
+
+			sfd.write_all( option[ out::file::silent ]() );
+		} else {
+			protocols::moves::NullMover mover;
+			protocols::jobdist::not_universal_main( mover );
+		}
 	} catch (utility::excn::Exception const & e ) {
 		e.display();
 		return -1;
