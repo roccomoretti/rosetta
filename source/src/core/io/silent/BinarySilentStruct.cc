@@ -627,6 +627,18 @@ void BinarySilentStruct::fill_pose(
 			tr.Warning << "Incomplete connection found: " << res1 << " " << atom1 << " to nothing." << std::endl;
 			continue;
 		}
+		if ( res1 == 0 || res1 > pose.size() || res2 > pose.size() || !pose.residue(res1).has(atom1) || !pose.residue(res2).has(atom2) ) {
+			tr.Error << "Malformed connection found: " << res1 << " `" << atom1 << "` to " << res2 << " `" << atom2 << "`" << std::endl;
+			continue;
+		}
+		if ( pose.residue_type(res1).n_residue_connections_for_atom( pose.residue(res1).atom_index(atom1) ) == 0 ) {
+			tr.Error << "Residue " << pose.residue(res1).name() << " " << res1 <<" does not have an available connection at atom " << atom1 << std::endl;
+			continue;
+		}
+		if ( pose.residue_type(res2).n_residue_connections_for_atom( pose.residue(res2).atom_index(atom2) ) == 0 ) {
+			tr.Error << "Residue " << pose.residue(res2).name() << " " << res2 << " does not have an available connection at atom " << atom2 << std::endl;
+			continue;
+		}
 
 		pose.conformation().declare_chemical_bond(res1, atom1, res2, atom2);
 	}
