@@ -752,7 +752,9 @@ void BinarySilentStruct::fill_pose(
 		pose.conformation().chain_endings( chain_endings() );
 	}
 
-	core::pose::initialize_disulfide_bonds(pose);
+	// Check the option system for disulfide-related flags.
+	// But the saved disulfide state should be contained in noncanonical_residue_connections_, so preserve that by default.
+	core::pose::initialize_disulfide_bonds(pose, false);
 
 	finish_pose( pose );
 

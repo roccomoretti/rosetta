@@ -1181,6 +1181,14 @@ void
 initialize_disulfide_bonds(
 	Pose & pose
 ) {
+	initialize_disulfide_bonds(pose, pose.is_fullatom());
+}
+
+void
+initialize_disulfide_bonds(
+	Pose & pose,
+	bool dflt
+) {
 	// disulfides
 	using basic::options::option;
 	using namespace basic::options::OptionKeys;
@@ -1190,11 +1198,10 @@ initialize_disulfide_bonds(
 		utility::vector1< std::pair<Size,Size> > disulfides;
 		ds_file.disulfides(disulfides, pose);
 		pose.conformation().fix_disulfides( disulfides );
+	} else if ( option[ in::detect_disulf ].user() && option[ in::detect_disulf ]() ) { // detect_disulf true
+			pose.conformation().detect_disulfides();
 	} else {
-		if ( option[ in::detect_disulf ].user() ?
-				option[ in::detect_disulf ]() : // detect_disulf true
-				pose.is_fullatom() // detect_disulf default but fa pose
-				) {
+		if (dflt) {
 			pose.conformation().detect_disulfides();
 		}
 	}

@@ -252,9 +252,18 @@ mass(
 );
 
 /// @brief detect and fix disulfide bonds
+/// Obeys the option system and defaults to re-detecting bonds for fullatom poses
 void
 initialize_disulfide_bonds(
 	Pose & pose
+);
+
+/// @brief detect and fix disulfide bonds
+/// Obeys the option system in all cases, but when the option system doesn't contain a directive, will only re-detect disulfides if dflt is true
+void
+initialize_disulfide_bonds(
+	Pose & pose,
+	bool dflt
 );
 
 /// @brief detect and fix disulfide bonds
