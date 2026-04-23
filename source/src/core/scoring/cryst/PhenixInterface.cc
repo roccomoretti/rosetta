@@ -58,6 +58,11 @@
     PyErr_PrintEx(0); \
     utility_exit_with_message(msg); \
   }
+
+#ifdef USE_PYTHON3
+#define PyString_FromString PyUnicode_FromString
+#endif
+
 #endif
 
 namespace core {
@@ -95,7 +100,11 @@ PhenixInterface::PhenixInterface() {
 	std::string PHENIX_PYTHON_PATHS ( getenv("ROSETTA_PHENIX_MODULES") );
 
 
-	std::vector< char > PHENIX_BIN_char(PHENIX_BIN.c_str(), PHENIX_BIN.c_str()+PHENIX_BIN.length()+1);
+#if USE_PYTHON3
+	static std::vector< wchar_t > PHENIX_BIN_char(PHENIX_BIN.c_str(), PHENIX_BIN.c_str()+PHENIX_BIN.length()+1);
+#else
+	static std::vector< char > PHENIX_BIN_char(PHENIX_BIN.c_str(), PHENIX_BIN.c_str()+PHENIX_BIN.length()+1);
+#endif
 	Py_SetProgramName( &PHENIX_BIN_char[0] );
 
 	Py_Initialize();  // initialize the python interpreter

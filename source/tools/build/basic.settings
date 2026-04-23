@@ -1077,6 +1077,28 @@ settings = {
         },
     },
 
+    "gcc, python3" : {
+        "appends" : {
+            "include_path" : [ "#external/include/python3" ],
+            "defines" : [ "WITH_PYTHON=1", "USE_PYTHON3" ],
+            "libraries" : [
+                "python3",
+                "dl",
+                "pthread",
+                "util"
+            ],
+        },
+        "removes" : {
+            "flags" : {
+                "warn" : [
+                    # We turn off warnings as errors for Python build
+                    # only because the automatic Python interface wrapping
+                    # can introduce warnings.
+                    "Werror",
+                ],
+            },
+        },
+    },
 
     "gcc, mysql" : {
         "appends" : {

@@ -868,6 +868,7 @@ sources = {
 		#"SurfaceGroups",
 	],
 	"pilot/rmoretti" : [
+		"python3_test",
 		#"bcl_type_check", # internal, never intended for release
 		#"bootstrap_bcl_types", # internal, never intended for release
 		#"crash_report_test",

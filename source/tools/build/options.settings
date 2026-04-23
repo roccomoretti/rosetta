@@ -122,8 +122,11 @@ options = {
         # Enable OpenMP
         "omp",
 
-        # Link to python interpreter
+        # Link to python2.7 interpreter (PHENIX)
         "python",
+
+        # Link to python3 interpreter,
+        "python3",
 
         #enable mysql database support
         "mysql",
