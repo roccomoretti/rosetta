@@ -120,6 +120,26 @@ public:
 		TS_ASSERT_EQUALS( residues.size(), 2 ); // database C12, D-patched version and no CCD version
 	}
 
+	void test_patched_name3() {
+		using namespace core::chemical;
+
+		{
+			ResidueTypeFinder rtf( *rts_ );
+			rtf.name3( "GTP" );
+			ResidueTypeCOPs residues( rtf.get_all_possible_residue_types(/*allow_extra_variants*/true) ); // RGU:5PrimePackTriPhos has variant FIVE_PRIME_PACKABLE_TRIPHOSPHATE
+			TS_ASSERT_EQUALS( residues.size(), 1 );
+			TS_ASSERT_EQUALS( residues[1]->name(), "RGU:5PrimePackTriPhos" );
+			TS_ASSERT_EQUALS( residues[1]->name3(), "GTP" );
+		}
+		{
+			ResidueTypeFinder rtf( *rts_ );
+			rtf.name3( "DI" ); // No Space (e.g. from mmCIF)
+			ResidueTypeCOPs residues( rtf.get_all_possible_residue_types(/*allow_extra_variants*/true) ); // INO:deoxy_O2prime has variant DEOXY_O2PRIME
+			TS_ASSERT_EQUALS( residues.size(), 1 );
+			TS_ASSERT_EQUALS( residues[1]->name(), "INO:deoxy_O2prime" )
+			TS_ASSERT_EQUALS( residues[1]->name3(), " DI" )
+		}
+	}
 
 	void test_get_by_all_possible() {
 		using namespace core::chemical;

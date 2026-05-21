@@ -357,6 +357,7 @@ ResidueTypeSetCache::regenerate_cached_maps() {
 				std::string const & new_name3 = p->generates_new_name3( *rsd_type );
 				if ( new_name3.size() > 0 && rsd_type->name3() != new_name3 ) {
 					name3_generated_by_base_residue_name_[ rsd_type->name() ].insert( new_name3 );
+					name3_generated_by_base_residue_name_[ rsd_type->name() ].insert( utility::stripped_whitespace(new_name3) );
 				}
 
 				// similarly, check if any patches create interchangeability_groups from this base residue type.

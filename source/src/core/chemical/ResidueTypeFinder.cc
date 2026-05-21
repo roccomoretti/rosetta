@@ -596,7 +596,7 @@ ResidueTypeFinder::filter_by_name3( ResidueTypeCOPs & rsd_types, bool const keep
 		[&](ResidueTypeCOP const & rsd_type) {
 			std::string const & name3 = rsd_type->name3();
 			return name3 != name3_ && utility::strip( name3 ) != name3_stripped &&
-			!( keep_if_base_type_generates_name3 && residue_type_set_.generates_patched_residue_type_with_name3( name3, name3_ ) );
+			!( keep_if_base_type_generates_name3 && residue_type_set_.generates_patched_residue_type_with_name3( rsd_type->name(), name3_ ) );
 		}),
 		rsd_types.end()
 	);
@@ -743,15 +743,17 @@ ResidueTypeFinder::adds_any_variant( PatchCOP patch ) const
 bool
 ResidueTypeFinder::fixes_name3( PatchCOP patch, ResidueTypeCOP rsd_type ) const
 {
-	if ( name3_.size() > 0 &&
-			rsd_type->name3() != name3_ &&
-			residue_type_set_.generates_patched_residue_type_with_name3( residue_type_base_name( *rsd_type ), name3_ ) ) {
-		MutableResidueTypeCOP new_type( patch->apply( *rsd_type, false /*instantiate*/ ) );
-		if ( new_type && new_type->name3() == name3_ ) {
-			return true;
-		}
-	}
-	return false;
+	if ( name3_.size() == 0 ) { return false; }
+	// Strip whitespace to handle name3 from mmCIF files.
+	std::string desired = utility::stripped_whitespace(name3_);
+	std::string current = utility::stripped_whitespace(rsd_type->name3());
+	if ( desired == current ) { return false; } // No need to patch: we have it already
+	if ( ! residue_type_set_.generates_patched_residue_type_with_name3( residue_type_base_name( *rsd_type ), desired ) ) { return false; }
+
+	MutableResidueTypeCOP new_type( patch->apply( *rsd_type, false /*instantiate*/ ) );
+	if ( ! new_type ) { return false; }
+	std::string created = utility::stripped_whitespace(new_type->name3());
+	return created == desired;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
