@@ -257,6 +257,8 @@ ResidueTypeFinder::initialize_relevant_pdb_components() const
 		}
 	}
 
+	if ( name3_ == "UNK" || name3_ == "UNL" ) { return; } // These aren't valid CCD codes, so don't try.
+
 	// Will cause the RTS to load the PDB component into its base residue types
 	residue_type_set_.name_mapOP( "pdb_" + utility::strip(name3_) );
 }
