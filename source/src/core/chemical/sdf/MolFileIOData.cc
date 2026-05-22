@@ -660,7 +660,20 @@ void MolFileIOMolecule::create_dummy_atom(MutableResidueTypeOP restype, std::str
 
 	restype_atom.ideal_xyz( restype->atom( first_atom ).ideal_xyz() + xyz_offset );
 
-	restype->add_bond( vd, first_atom, UnknownBond );
+	VD bond_atom = first_atom;
+
+	// Avoid bonds to hydrogen, if possible (to avoid two bonds to H)
+	if ( restype->atom(bond_atom).element() == element::H ) {
+		for ( VD atm: restype->all_atoms() ) {
+			if ( atm == vd ) { continue; } // Avoid self-bonds
+			if ( restype->atom(atm).element() != element::H ) {
+				bond_atom = atm;
+				break;
+			}
+		} // Very deliberately keep bond_atom as first_atom if we fall through with all atoms being H (e.g. D8U)
+	}
+
+	restype->add_bond( vd, bond_atom, UnknownBond );
 }
 
 void MolFileIOMolecule::set_from_extra_data(MutableResidueType & restype, std::map< mioAD, VD > & restype_from_mio) {

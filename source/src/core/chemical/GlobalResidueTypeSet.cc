@@ -854,6 +854,7 @@ GlobalResidueTypeSet::attempt_ccd_readin( std::string const & db_filename, std::
 		utility::vector1< core::chemical::sdf::MolFileIOMoleculeOP> molecules;
 		molecules.push_back( molecule );
 		new_rsd_type = core::chemical::sdf::convert_to_ResidueType( molecules );
+		if ( new_rsd_type == nullptr ) { return; } // Whoops -- can't generate molecule
 		new_rsd_type->base_name( pdb_id );
 
 		// By default, the ResidueType is being loaded as a Full Atom type - convert to the correct form, if possible.
