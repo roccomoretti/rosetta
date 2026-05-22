@@ -576,7 +576,8 @@ PoseFromSFRBuilder::pass_2_quick_and_dirty_resolve_residue_types()
 
 		/////////////////////////
 		// Handle residue to skip
-		if ( name3 == "UNL" ) {
+		if ( name3 == "UNL" || name3 == "UNK" ) {
+			TR.Warning << "Residue " << name3 << " is explicitly an 'unknown' residue - Ignoring. Replace in input with different three letter code if you actually want to model it." << std::endl;
 			residue_was_recognized_[ ii ] = false;
 			continue;
 		}
@@ -1863,10 +1864,13 @@ PoseFromSFRBuilder::is_residue_type_recognized(
 ){
 	using namespace core::chemical;
 
-	// UNL cannot be recognized -- as an "unknown ligand" it has zero atoms.
+	// UNL & UNK cannot be recognized -- as an "unknown ligand" or "unknown atom" it has zero atoms in the CCD representation
 	// AMW TODO: if at some point a Rosetta type is developed that is supposed to
 	// represent an unknown ligand -- some kind of repulsive ball, who knows! -- undo this.
-	if ( rosetta_residue_name3 == "UNL" ) return false;
+	if ( rosetta_residue_name3 == "UNL" || rosetta_residue_name3 == "UNK" ) {
+		TR.Warning << "Residue " << rosetta_residue_name3 << " is explicitly an 'unknown' residue - Ignoring. Replace in input with different three letter code if you actually want to model it." << std::endl;
+		return false;
+	}
 
 	// this residue list is only used to see if there are any residue_types with name3 at all:
 	ResidueTypeCOPs rsd_type_list;

@@ -1930,6 +1930,7 @@ Conformation::fill_missing_atoms(
 			// RM: At some point it would be nice to move this logic (or similar) into Residue::fill_missing_atoms
 			++tries;
 			if ( tries > natoms ) {
+				TR.Error << "Too many tries in fill_missing_atoms for residue " << i << " " << residue_(i).name() << std::endl; // Don't have PDB info at this level
 				utility_exit_with_message("too many tries in fill_missing_atoms!");
 			}
 			for ( Size j=1; j<= natoms; ++j ) {
@@ -2378,8 +2379,7 @@ Conformation::detect_disulfides( utility::vector1< std::pair<Size,Size> > const 
 
 			Size jj_sg_atomno(0);
 			if ( jj_res.type().get_disulfide_atom_name() == "NONE" ) {
-				TR.Error << "Can't find an atom to disulfide bond from at residue "<< jj_resid <<std::endl;
-				utility_exit();
+				utility_exit_with_message( "Can't find an atom to disulfide bond from at residue " + std::to_string(jj_resid) );
 			} else {
 				jj_sg_atomno = jj_res.type().atom_index( jj_res.type().get_disulfide_atom_name() );
 			}
