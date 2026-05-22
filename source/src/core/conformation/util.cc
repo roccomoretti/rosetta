@@ -692,7 +692,7 @@ check_good_cutpoint_neighbour(
 	} else {
 		runtime_assert_string_msg(
 			other_res.type().is_alpha_aa() || other_res.type().is_beta_aa() || other_res.type().is_gamma_aa() || other_res.type().is_peptoid() || other_res.type().is_oligourea() || other_res.type().is_aramid() || other_res.type().is_RNA() || other_res.type().has_property( chemical::TNA ),
-			"Error in core::conformation::check_good_cutpoint_neighbour(): The connected residue is neither a peptoid, nor an oligourea, nor an alpha-, beta-, or gamma-amino acid."
+			"Error in core::conformation::check_good_cutpoint_neighbour(): The connected residue ("+other_res.type().name()+") is neither a peptoid, nor an oligourea, nor an alpha-, beta-, or gamma-amino acid."
 		);
 	}
 }
@@ -719,50 +719,55 @@ update_cutpoint_virtual_atoms_if_connected(
 
 	if ( thisres.has_variant_type(core::chemical::CUTPOINT_LOWER) ) {
 		core::Size const other_res_index( thisres.connected_residue_at_upper() ); //The residue to which I'm connected at my upper connection.
-		if ( other_res_index != 0 ) {
-			core::conformation::Residue const & other_res( conf.residue(other_res_index) );
-			check_good_cutpoint_neighbour( thisres, other_res );
-			core::Real const dist1( other_res.lower_connect().icoor().d() ); //Distance from LOWER to N.
-			core::Real const angle2( other_res.lower_connect().icoor().theta() ); //Note that this is Pi-bondangle, in radians.
-			core::Real const dist2( other_res.xyz( other_res.lower_connect().icoor().stub_atom1().atomno() ).distance( other_res.xyz( other_res.lower_connect().icoor().stub_atom2().atomno() ) ) ); //Distance from N to CA (or N to C4 in gamma-aas).
+		if ( other_res_index == 0 ) { return; }
 
-			core::chemical::AtomICoor const & ovl1_icoor ( thisres.icoor(thisres.atom_index("OVL1")) );
-			core::chemical::AtomICoor ovl1_new_icoor("OVL1", ovl1_icoor.phi(), ovl1_icoor.theta(),
-				dist1, thisres.atom_name( ovl1_icoor.stub_atom1().atomno() ), thisres.atom_name( ovl1_icoor.stub_atom2().atomno() ), thisres.atom_name( ovl1_icoor.stub_atom3().atomno() ), thisres.type());
-			conf.set_xyz( core::id::AtomID(thisres.atom_index("OVL1"), cutpoint_res), ovl1_new_icoor.build( thisres, conf ) );
+		core::conformation::Residue const & other_res( conf.residue(other_res_index) );
+		if ( !other_res.has_lower_connect() ) { return; }
+		if ( other_res.connected_residue_at_lower() != cutpoint_res ) { return; } // Connected somewhere other than lower
 
-			if ( !thisres.type().is_carbohydrate() && !other_res.type().is_carbohydrate() ) { //JASON JASON JASON -- this is the other special-case thing for carbohydrates.  -VKM
-				core::chemical::AtomICoor const & ovl2_icoor ( thisres.icoor(thisres.atom_index("OVL2")) );
-				core::chemical::AtomICoor ovl2_new_icoor("OVL2", ovl2_icoor.phi(), angle2,
-					dist2, thisres.atom_name( ovl2_icoor.stub_atom1().atomno() ), thisres.atom_name( ovl2_icoor.stub_atom2().atomno() ), thisres.atom_name( ovl2_icoor.stub_atom3().atomno() ), thisres.type());
-				conf.set_xyz( core::id::AtomID(thisres.atom_index("OVL2"), cutpoint_res), ovl2_new_icoor.build( thisres, conf ) );
-			}
+		core::Real const dist1( other_res.lower_connect().icoor().d() ); //Distance from LOWER to N.
+		core::Real const angle2( other_res.lower_connect().icoor().theta() ); //Note that this is Pi-bondangle, in radians.
+		core::Real const dist2( other_res.xyz( other_res.lower_connect().icoor().stub_atom1().atomno() ).distance( other_res.xyz( other_res.lower_connect().icoor().stub_atom2().atomno() ) ) ); //Distance from N to CA (or N to C4 in gamma-aas).
 
-			if ( recurse ) {
-				update_cutpoint_virtual_atoms_if_connected(conf, other_res_index, false);
-			}
+		core::chemical::AtomICoor const & ovl1_icoor ( thisres.icoor(thisres.atom_index("OVL1")) );
+		core::chemical::AtomICoor ovl1_new_icoor("OVL1", ovl1_icoor.phi(), ovl1_icoor.theta(),
+			dist1, thisres.atom_name( ovl1_icoor.stub_atom1().atomno() ), thisres.atom_name( ovl1_icoor.stub_atom2().atomno() ), thisres.atom_name( ovl1_icoor.stub_atom3().atomno() ), thisres.type());
+		conf.set_xyz( core::id::AtomID(thisres.atom_index("OVL1"), cutpoint_res), ovl1_new_icoor.build( thisres, conf ) );
+
+		if ( !thisres.type().is_carbohydrate() && !other_res.type().is_carbohydrate() ) { //JASON JASON JASON -- this is the other special-case thing for carbohydrates.  -VKM
+			core::chemical::AtomICoor const & ovl2_icoor ( thisres.icoor(thisres.atom_index("OVL2")) );
+			core::chemical::AtomICoor ovl2_new_icoor("OVL2", ovl2_icoor.phi(), angle2,
+				dist2, thisres.atom_name( ovl2_icoor.stub_atom1().atomno() ), thisres.atom_name( ovl2_icoor.stub_atom2().atomno() ), thisres.atom_name( ovl2_icoor.stub_atom3().atomno() ), thisres.type());
+			conf.set_xyz( core::id::AtomID(thisres.atom_index("OVL2"), cutpoint_res), ovl2_new_icoor.build( thisres, conf ) );
+		}
+
+		if ( recurse ) {
+			update_cutpoint_virtual_atoms_if_connected(conf, other_res_index, false);
 		}
 	}
 	if ( thisres.has_variant_type(core::chemical::CUTPOINT_UPPER) ) {
 		core::Size const other_res_index( thisres.connected_residue_at_lower() ); //The residue to which I'm connected at my lower connection.
-		if ( other_res_index != 0 ) {
-			core::conformation::Residue const & other_res( conf.residue(other_res_index) );
-			check_good_cutpoint_neighbour( thisres, other_res );
-			core::Real const dist1( other_res.upper_connect().icoor().d() ); //Distance from UPPER to C.
+		if ( other_res_index == 0 ) { return; }
 
-			core::chemical::AtomICoor const & ovu1_icoor ( thisres.icoor(thisres.atom_index("OVU1")) );
-			core::chemical::AtomICoor ovu1_new_icoor("OVU1", ovu1_icoor.phi(), ovu1_icoor.theta(), dist1,
-				thisres.atom_name( ovu1_icoor.stub_atom1().atomno() ),
-				thisres.atom_name( ovu1_icoor.stub_atom2().atomno() ),
-				ovu1_icoor.stub_atom3().atomno() == 0 ? "LOWER" : thisres.atom_name( ovu1_icoor.stub_atom3().atomno() ), //In some cases, the third stub atom is the lower connection.
-				thisres.type()
-			);
-			conf.set_xyz( core::id::AtomID(thisres.atom_index("OVU1"), cutpoint_res), ovu1_new_icoor.build(thisres, conf ) );
+		core::conformation::Residue const & other_res( conf.residue(other_res_index) );
+		if ( !other_res.has_upper_connect() ) { return; }
+		if ( other_res.connected_residue_at_upper() != cutpoint_res ) { return; } // Connected somewhere other than lower
 
-			if ( recurse ) {
-				update_cutpoint_virtual_atoms_if_connected(conf, other_res_index, false);
-			}
+		core::Real const dist1( other_res.upper_connect().icoor().d() ); //Distance from UPPER to C.
+
+		core::chemical::AtomICoor const & ovu1_icoor ( thisres.icoor(thisres.atom_index("OVU1")) );
+		core::chemical::AtomICoor ovu1_new_icoor("OVU1", ovu1_icoor.phi(), ovu1_icoor.theta(), dist1,
+			thisres.atom_name( ovu1_icoor.stub_atom1().atomno() ),
+			thisres.atom_name( ovu1_icoor.stub_atom2().atomno() ),
+			ovu1_icoor.stub_atom3().atomno() == 0 ? "LOWER" : thisres.atom_name( ovu1_icoor.stub_atom3().atomno() ), //In some cases, the third stub atom is the lower connection.
+			thisres.type()
+		);
+		conf.set_xyz( core::id::AtomID(thisres.atom_index("OVU1"), cutpoint_res), ovu1_new_icoor.build(thisres, conf ) );
+
+		if ( recurse ) {
+			update_cutpoint_virtual_atoms_if_connected(conf, other_res_index, false);
 		}
+
 	}
 	conf.update_actcoord( cutpoint_res );
 }
