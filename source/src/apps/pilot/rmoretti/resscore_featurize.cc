@@ -74,6 +74,7 @@ public:
 	utility::vector1< std::string >
 	get_feature_names() const {
 		return {
+			"hydro",
 			"element",
 			"geom",
 			"nhydro",
@@ -90,6 +91,7 @@ public:
 		if ( atom_features_.count( name ) == 0 || atom_features_[name].count(atm) == 0 ) {
 			utility::vector1< std::string > features;
 
+			features.push_back( get_hydro(restype, atm) );
 			features.push_back( get_element(restype, atm) );
 			features.push_back( get_geom(restype, atm) );
 			features.push_back( std::to_string( get_nhydro(restype, atm) ) );
@@ -100,6 +102,16 @@ public:
 			atom_features_[name][atm] = std::move(features);
 		}
 		return atom_features_[name][atm];
+	}
+
+	static
+	std::string
+	get_hydro(core::chemical::ResidueType const & restype, core::Size atm) {
+		if ( restype.atom_is_hydrogen(atm) ) {
+			return "T";
+		} else {
+			return "F";
+		}
 	}
 
 	static
