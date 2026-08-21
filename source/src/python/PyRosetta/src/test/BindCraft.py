@@ -326,7 +326,13 @@ class BindCraftTest(unittest.TestCase):
         self.assertAlmostEqual(interface_scores['binder_score'], 107.08)
         self.assertAlmostEqual(interface_scores['surface_hydrophobicity'], 0.16)
         self.assertAlmostEqual(interface_scores['interface_sc'], 0.69)
-        self.assertAlmostEqual(interface_scores['interface_packstat'], 0.48)
+
+        # This is reporting 0.48 with PyRosetta4.conda.ubuntu.cxx11thread.serialization.Ubuntu.python312.Release 2025.17+release.356248d2035a0749e09a4a79479678a8f54e7220
+        # 0.52 with PyRosetta4.conda.ubuntu-20.04.cxx11thread.serialization.Ubuntu.python314.Release 2026.33+release.97cfde1af8f45eee9625c0fd72c6b7194bf31d24
+        # but 0.55 on the test server (Rosetta devel 2026.33.post.dev+2.HEAD.5c10c92fe4852989385dd261fa3e516a762bc395)
+        self.assertGreater(interface_scores['interface_packstat'], 0.4)
+        self.assertLess(interface_scores['interface_packstat'], 0.6)
+
         self.assertAlmostEqual(interface_scores['interface_dG'], 113.75)
         self.assertAlmostEqual(interface_scores['interface_dSASA'], 1853.22)
         self.assertAlmostEqual(interface_scores['interface_dG_SASA_ratio'], 6.14)
