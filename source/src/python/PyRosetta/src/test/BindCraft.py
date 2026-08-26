@@ -297,6 +297,7 @@ def pr_relax(pdb_file, relaxed_pdb_path):
 ###################################################################################################################
 # End transclusion
 
+import os
 import unittest
 import shutil
 import pyrosetta
@@ -311,13 +312,15 @@ class BindCraftTest(unittest.TestCase):
         pyrosetta.init(extra_options = "-constant_seed -ignore_unrecognized_res -ignore_zero_occupancy -corrections::beta_nov16 true -relax:default_repeats 1")  # WARNING: option '-constant_seed' is for testing only! MAKE SURE TO REMOVE IT IN PRODUCTION RUNS!!!!!
         print( pyrosetta.version() )
         cls.workdir = tempfile.TemporaryDirectory()
+        os.makedirs('.test.output', exist_ok=True) # In case it doesn't exist for local testings, etc.
+        os.chdir('.test.output')
 
     @classmethod
     def tearDownClass(cls):
         cls.workdir.cleanup()
 
     def test_score_interface(self):
-        pdb_file = "test/data/9had_AB.pdb" # Needs to be A_B
+        pdb_file = "../test/data/9had_AB.pdb" # Needs to be A_B
         interface_scores = score_interface(pdb_file, binder_chain="B")
 
         print("TEST_SCORE_INTERFACE:", interface_scores)
@@ -345,9 +348,9 @@ class BindCraftTest(unittest.TestCase):
 
 
     def test_align(self):
-        reference_pdb = "test/data/9had_AB.pdb"
+        reference_pdb = "../test/data/9had_AB.pdb"
         align_pdb = os.path.join(self.workdir.name, "align_test.pdb")
-        shutil.copyfile("test/data/9had_EF.pdb", align_pdb )
+        shutil.copyfile("../test/data/9had_EF.pdb", align_pdb )
         reference_chain_id = "B"
         align_chain_id = "F"
         reference_chain_id_to = "A"
@@ -373,9 +376,10 @@ class BindCraftTest(unittest.TestCase):
 
 
     def test_pr_relax(self):
+        pdb_file = "../test/data/9had_AB.pdb"
+
         scorefxn = pyrosetta.get_fa_scorefxn()
 
-        pdb_file = "test/data/9had_AB.pdb"
         relaxed_pdb_path = os.path.join(self.workdir.name, "relaxed.pdb")
 
         pose = rosetta.core.import_pose.pose_from_file(pdb_file)
