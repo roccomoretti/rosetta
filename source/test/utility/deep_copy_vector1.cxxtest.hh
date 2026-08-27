@@ -57,7 +57,7 @@ class HolderClass {
 public:
 	HolderClass() = default;
 	HolderClass( core::Size size ) :
-		items(size)
+		items(size, nullptr)
 	{}
 
 	utility::deep_copy_vector1< ClonableBaseOP > items;
@@ -114,7 +114,11 @@ public:
 		HolderClass copy;
 		copy.items.push_back( utility::pointer::make_shared< ClonableBase >(4) );
 
+		// Not sure why, but this is triggering a warning on GCC 16.2, for deleting the contents of copy.items
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 		copy = source;
+#pragma GCC diagnostic pop
 
 		TS_ASSERT_EQUALS( source.items.size(), 3 );
 		TS_ASSERT_EQUALS( copy.items.size(), 3 );
